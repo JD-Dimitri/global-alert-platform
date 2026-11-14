@@ -97,7 +97,7 @@ await layer('milbase', { ...OSM, note: OSM.note + ' Uniquement les emprises mili
 await layer('milair', { ...OSM, precision: 'Centre de l\'aérodrome' }, async () =>
   osmItems(await overpass('nwr["military"="airfield"];out center tags;'), t => [t.iata, t.icao, t.operator].filter(Boolean).join(' · ')));
 await layer('border', { ...OSM, precision: 'Poste frontière' }, async () =>
-  osmItems(await overpass('node["barrier"="border_control"];out tags;'), t => t.operator || ''));
+  osmItems(await overpass('node["barrier"="border_control"];out body;'), t => t.operator || ''));
 await layer('observ', { ...OSM, note: OSM.note + ' Observatoires astronomiques nommés.', precision: 'Coordonnées du site' }, async () =>
   osmItems(await overpass('nwr["man_made"="observatory"]["name"];out center tags;'), t => t.operator || t.observatory || ''));
 

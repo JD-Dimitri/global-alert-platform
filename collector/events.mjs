@@ -65,10 +65,12 @@ async function eonet() {
     const cat = EONET_MAP[ev.categories?.[0]?.id]; if (!cat || !ev.geometry?.length) continue;
     const g = ev.geometry[ev.geometry.length - 1], [lng, lat] = centroid(g);
     const s = sevMeasure(cat, g.magnitudeValue, g.magnitudeUnit) || [0, 'La source ne fournit pas de mesure permettant d\'évaluer la gravité.'];
+    const rx = cat === 'fire' && /prescribed|\bRX\b/i.test(ev.title);
+    if (rx) { s[0] = 1; s[1] = 'Brûlage dirigé (feu prescrit et contrôlé par les autorités) : information.'; }
     out.push({
       id: 'eonet-' + ev.id, cat, titleOrig: ev.title, lat: R(lat), lng: R(lng),
       time: iso(ev.geometry[0].date), updated: iso(g.date), sev: s[0], sevWhy: s[1], mag: g.magnitudeValue ?? null, magUnit: g.magnitudeUnit || null,
-      verif: 'officiel', precision: g.type === 'Point' ? 'approx' : 'zone',
+      verif: 'officiel', precision: g.type === 'Point' ? 'approx' : 'zone', prescribed: rx || undefined,
       track: ev.geometry.slice(-12).map(x => { const c = centroid(x); return [iso(x.date), R(c[1], 2), R(c[0], 2), x.magnitudeValue ?? null]; }),
       sources: [{ n: 'NASA EONET', u: ev.link }, ...(ev.sources || []).map(s => ({ n: s.id, u: s.url }))]
     });
@@ -78,7 +80,11 @@ async function eonet() {
 
 const GDACS_MAP = { EQ: 'quake', TC: 'storm', FL: 'flood', VO: 'volcano', DR: 'drought', WF: 'fire' };
 async function gdacs() {
-  const j = await http('https://www.gdacs.org/gdacsapi/api/events/geteventlist/MAP', { timeout: 45000 });
+  // Endpoints documentés (GDACS API quickstart) : events4app (événements courants), sinon SEARCH sur 30 jours.
+  const d = t => new Date(t).toISOString().slice(0, 10);
+  let j;
+  try { j = await http('https://www.gdacs.org/gdacsapi/api/events/geteventlist/events4app', { timeout: 45000 }); }
+  catch { j = await http(`https://www.gdacs.org/gdacsapi/api/events/geteventlist/SEARCH?eventlist=EQ;TC;FL;VO;DR;WF&fromdate=${d(now - 30 * 864e5)}&todate=${d(now + 864e5)}&alertlevel=green;orange;red`, { timeout: 45000 }); }
   const out = [];
   for (const f of j.features || []) {
     const p = f.properties || {}, cat = GDACS_MAP[p.eventtype]; if (!cat || !f.geometry) continue;
@@ -130,7 +136,7 @@ async function ll2() {
       verif: confirmed ? 'officiel' : 'annonce', launchStatus: l.status?.name || null, launchStatusAbbrev: st,
       provider: l.launch_service_provider?.name || null, rocket: l.rocket?.configuration?.full_name || null,
       mission: l.mission?.name || null, missionDesc: l.mission?.description || null, padName: pad.name || null, upcoming: !done,
-      precision: 'exact', sources: [{ n: 'Launch Library 2', u: l.url }]
+      precision: /unknown/i.test(pad.name || '') ? 'approx' : 'exact', sources: [{ n: 'Launch Library 2', u: l.url }]
     };
   };
   return [...up.results.map(l => map(l, false)), ...past.results.map(l => map(l, true))].filter(e => Number.isFinite(e.lat));
@@ -158,18 +164,25 @@ async function who() {
   const out = [];
   for (const d of j.value || []) {
     const title = d.Title || d.OverrideTitle || '';
-    const parts = title.split(/\s[-–—]\s/); const place = parts.length > 1 ? parts[parts.length - 1] : null;
-    const c = place && countryByName(place.replace(/\s*\(.*?\)\s*$/, '').trim()) || (place && countryByName(place.trim()));
     const t = Date.parse(d.PublicationDateAndTime || d.PublicationDate);
     if (now - t > 180 * 864e5) continue;
-    out.push({
-      id: 'who-' + (d.DonId || d.Id || d.UrlName), cat: 'health', titleOrig: title, disease: parts.length > 1 ? parts.slice(0, -1).join(' – ') : title,
-      lat: c ? R(c.lat, 2) : null, lng: c ? R(c.lng, 2) : null, countryForced: c ? { name: c.name, iso2: c.iso2 } : null,
-      time: iso(t), updated: iso(Date.parse(d.LastModified || d.PublicationDateAndTime || t)),
-      sev: 0, sevWhy: 'L\'OMS publie une évaluation de risque dans le texte ; elle n\'est pas convertie automatiquement.',
-      verif: 'officiel', precision: c ? 'pays' : 'none',
+    // Titre type « Maladie - Pays » ou « Maladie, Pays A, Pays B and Pays C »
+    let disease = title, where = '';
+    const dash = title.split(/\s[-–—]\s/);
+    if (dash.length > 1) { disease = dash.slice(0, -1).join(' – '); where = dash.at(-1); }
+    else { const i = title.indexOf(','); if (i > 0) { disease = title.slice(0, i); where = title.slice(i + 1); } }
+    const names = where.split(/,|&|\band\b/).map(s => s.replace(/^\s*(the|Kingdom of)\s+/i, '').replace(/\s*\(.*?\)\s*$/, '').trim()).filter(Boolean);
+    const found = names.map(countryByName).filter(Boolean);
+    const uniq = [...new Map(found.map(c => [c.iso2, c])).values()];
+    const base = {
+      cat: 'health', titleOrig: title, disease, time: iso(t), updated: iso(Date.parse(d.LastModified || d.PublicationDateAndTime || t)),
+      sev: 0, sevWhy: 'L\'OMS publie une évaluation de risque dans le texte ; elle n\'est pas convertie automatiquement.', verif: 'officiel',
+      multi: uniq.length > 1 ? uniq.map(c => c.name) : null,
       sources: [{ n: 'OMS DON', u: d.UrlName ? `https://www.who.int/emergencies/disease-outbreak-news/item/${d.UrlName}` : C.who.url }]
-    });
+    };
+    const id = 'who-' + (d.DonId || d.Id || d.UrlName);
+    if (!uniq.length) out.push({ ...base, id, lat: null, lng: null, precision: 'none', scope: where || null });
+    else for (const c of uniq) out.push({ ...base, id: uniq.length > 1 ? `${id}-${c.iso2}` : id, lat: R(c.lat, 2), lng: R(c.lng, 2), countryForced: { name: c.name, iso2: c.iso2 }, precision: 'pays' });
   }
   return out;
 }
@@ -248,7 +261,7 @@ for (const e of all) {
   } else if (e.cat === 'launch') {
     e.title = `${e.upcoming ? 'Lancement prévu' : 'Lancement'} — ${e.titleOrig}`; e.place = e.padName || '';
   } else if (e.cat === 'health') {
-    e.title = `Alerte sanitaire OMS — ${e.disease}`; e.place = e.country || 'Localisation non précisée';
+    e.title = `Alerte sanitaire OMS — ${e.disease}`; e.place = e.multi ? `${e.country} (événement multi-pays : ${e.multi.join(', ')})` : (e.country || e.scope || 'Localisation non précisée');
   } else if (e.cat === 'cyber') {
     e.title = `${FR.cyber} — ${e.titleOrig}`; e.place = `${e.vendor} · ${e.product}`;
   } else if (e.cat === 'piracy') {
@@ -256,7 +269,7 @@ for (const e of all) {
   } else if (e.cat === 'fireball') {
     e.title = `Bolide${e.energyKt ? ` (énergie d'impact ~${e.energyKt} kt)` : ''}`; e.place = e.country || 'Au-dessus de l\'océan / zone non attribuée';
   } else {
-    const n = cleanName(e.titleOrig); e.title = `${FR[e.cat]} — ${n || e.titleOrig}`; e.place = n || e.titleOrig;
+    const n = cleanName(e.titleOrig).replace(/^Prescribed Fire\s*/i, ''); e.title = `${e.prescribed ? 'Brûlage dirigé' : FR[e.cat]} — ${n || e.titleOrig}`; e.place = n || e.titleOrig;
   }
   const indep = new Set(e.via).size;
   e.verifLabel = (VERIF[e.verif] || 'Source officielle') + (indep > 1 ? ` · confirmé par ${indep} sources indépendantes` : '');
