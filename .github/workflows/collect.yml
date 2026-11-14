@@ -55,8 +55,8 @@ jobs:
             const fs=require("fs"); let ix={}; try{ix=JSON.parse(fs.readFileSync("data/ref/index.json"))}catch{}
             const keys=["airport","nuclear","dam","dc","spaceport","port","cable","choke","bourse","milbase","milair","border","observ"];
             const age=t=>Date.now()-Date.parse(t||0);
-            // OK → rafraîchi après 7 j ; en échec → nouvel essai après 24 h (évite de solliciter les API toutes les 10 min)
-            const stale=keys.filter(k=>!ix[k]||(ix[k].state==="ok"?age(ix[k].generated)>7*864e5:age(ix[k].lastTry||ix[k].generated)>864e5));
+            // OK → rafraîchi après 7 j ; en échec ou vide → nouvel essai après 3 h (évite de solliciter les API toutes les 10 min)
+            const stale=keys.filter(k=>!ix[k]||(ix[k].state==="ok"&&ix[k].n>0?age(ix[k].generated)>7*864e5:age(ix[k].lastTry||ix[k].generated)>3*3600e3));
             console.log(stale.join(" "));')
           if [ "$FORCE" = "true" ]; then DUE=""; node collector/reference.mjs || true
           elif [ -n "$DUE" ]; then echo "À rafraîchir : $DUE"; node collector/reference.mjs $DUE || true

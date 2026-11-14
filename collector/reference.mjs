@@ -16,7 +16,7 @@ async function layer(key, meta, fn) {
     const items = res.items ? res.items : res;
     const data = { generated: now, ...meta, ...(res.items ? res : {}), items: withCountry(items).filter(i => Number.isFinite(i.lat) && Number.isFinite(i.lng)) };
     writeJSON(`${OUT}/ref/${key}.json`, data);
-    index[key] = { ...meta, generated: now, n: data.items.length, state: 'ok', err: '' };
+    index[key] = { ...meta, generated: now, lastTry: now, n: data.items.length, state: 'ok', err: '' };
     console.log(`[${key}] ok · ${data.items.length} éléments · ${Date.now() - t0} ms`);
   } catch (e) {
     index[key] = { ...(index[key] || meta), state: index[key]?.n ? 'stale' : 'err', err: String(e?.message || e).slice(0, 300), lastTry: now };
