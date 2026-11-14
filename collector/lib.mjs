@@ -13,13 +13,13 @@ countries.registerLocale(require('i18n-iso-countries/langs/en.json'));
 const UA = 'GLOBAL-ALERT-collector/0.2 (+https://github.com/JD-Dimitri/global-alert-platform)';
 
 /** fetch avec délai, nouvelles tentatives et User-Agent explicite. */
-export async function http(url, { as = 'json', timeout = 30000, retries = 2, headers = {} } = {}) {
+export async function http(url, { as = 'json', timeout = 30000, retries = 2, headers = {}, method = 'GET', body } = {}) {
   let last;
   for (let i = 0; i <= retries; i++) {
     const ctl = new AbortController();
     const t = setTimeout(() => ctl.abort(), timeout);
     try {
-      const r = await fetch(url, { signal: ctl.signal, headers: { 'User-Agent': UA, Accept: as === 'json' ? 'application/json' : '*/*', ...headers } });
+      const r = await fetch(url, { method, body, signal: ctl.signal, headers: { 'User-Agent': UA, Accept: as === 'json' ? 'application/json' : '*/*', ...(body ? { 'Content-Type': 'application/json' } : {}), ...headers } });
       if (!r.ok) throw new Error(`HTTP ${r.status} ${r.statusText}`);
       return as === 'json' ? await r.json() : await r.text();
     } catch (e) {
@@ -60,13 +60,20 @@ const FEATS = feature(world, world.objects.countries).features.map(f => {
 const EXTRA_FR = { 'N. Cyprus': 'Chypre du Nord', Somaliland: 'Somaliland', Kosovo: 'Kosovo' };
 FEATS.forEach(c => { if (!c.a2 && EXTRA_FR[c.f.properties.name]) c.fr = EXTRA_FR[c.f.properties.name]; });
 
+// Outre-mer français : Natural Earth les inclut dans le polygone « France » → on précise la collectivité.
+const FR_OUTRE_MER = [['La Réunion', -21.5, -20.8, 55.1, 55.9], ['Mayotte', -13.1, -12.5, 44.9, 45.4], ['Guadeloupe', 15.8, 16.6, -61.9, -60.9],
+  ['Martinique', 14.3, 14.95, -61.3, -60.75], ['Guyane', 2.0, 6.0, -54.7, -51.5], ['Nouvelle-Calédonie', -23.0, -19.5, 163.5, 168.2],
+  ['Polynésie française', -28.0, -7.5, -155.0, -134.0], ['Saint-Pierre-et-Miquelon', 46.7, 47.2, -56.5, -56.1], ['Wallis-et-Futuna', -14.4, -13.1, -178.3, -176.0]];
 export function countryOf(lat, lng) {
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
   for (const c of FEATS) {
     const [[x0, y0], [x1, y1]] = c.bbox;
     if (lat < y0 || lat > y1) continue;
     if (x0 <= x1 && (lng < x0 || lng > x1)) continue;
-    if (geoContains(c.f, [lng, lat])) return { name: c.fr, iso2: c.a2 };
+    if (geoContains(c.f, [lng, lat])) {
+      if (c.a2 === 'FR') { const dom = FR_OUTRE_MER.find(([, a, b, cc, d]) => lat >= a && lat <= b && lng >= cc && lng <= d); if (dom) return { name: `${dom[0]} (France)`, iso2: 'FR' }; }
+      return { name: c.fr, iso2: c.a2 };
+    }
   }
   return null;
 }
@@ -87,6 +94,16 @@ export function countryByName(name) {
   const [lng, lat] = geoCentroid(c.f);
   return { name: c.fr, iso2: a2, lat, lng };
 }
+
+/** Centroïde d'un pays à partir de son code ISO alpha-3. */
+export function countryByIso3(iso3) {
+  const a2 = iso3 && countries.alpha3ToAlpha2(iso3);
+  const c = a2 && FEATS.find(x => x.a2 === a2);
+  if (!c) return null;
+  const [lng, lat] = geoCentroid(c.f);
+  return { name: c.fr, iso2: a2, lat, lng };
+}
+export const frName = iso2 => (iso2 && countries.getName(iso2, 'fr')) || null;
 
 /* ---------- Divers ---------- */
 export const R = (x, d = 3) => (Number.isFinite(+x) ? Math.round(+x * 10 ** d) / 10 ** d : null);

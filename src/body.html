@@ -99,6 +99,7 @@ const P = {
   skull:'<circle cx="12" cy="10" r="7"/><path d="M9 21v-4h6v4M9 10h.01M15 10h.01"/>',
   meteor:'<circle cx="16" cy="16" r="5"/><path d="M2 2l9 9M6 2l7 7M2 6l7 7"/>',
   scope:'<path d="m10 14-6 6M14 10l6-6-4-2-8 8 4 4 8-8-2-4"/><path d="M8 22h8"/>',
+  car:'<path d="M5 17h14M6 17v2M18 17v2M3 13l2-5a2 2 0 0 1 2-1h10a2 2 0 0 1 2 1l2 5v4H3v-4Z"/><circle cx="7.5" cy="14" r="1"/><circle cx="16.5" cy="14" r="1"/>',
   health:'<path d="M12 21s-8-4.5-8-11a5 5 0 0 1 8-4 5 5 0 0 1 8 4c0 6.5-8 11-8 11Z"/><path d="M12 9v5M9.5 11.5h5"/>'
 };
 const svg = (k, sw=2) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round">${P[k]||P.target}</svg>`;
@@ -107,8 +108,11 @@ const svg = (k, sw=2) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentCo
    kind 'ev' = événementiel (temps, gravité) · 'ref' = objet permanent (référentiel)
    src = connecteur(s) actif(s) · ref = fichier data/ref/<clé>.json · cand = source candidate */
 const FAMS = [
+ ['officiel','Alertes officielles des autorités',[
+  ['cap','Alertes officielles (CAP, 130 pays)','siren','#f43f5e','ev',['alerthub']]]],
  ['nat','Environnement & catastrophes',[
-  ['quake','Tremblements de terre','quake','#facc15','ev',['usgs','gdacs']],
+  ['quake','Tremblements de terre','quake','#facc15','ev',['usgs','emsc','gdacs']],
+  ['hotspot','Foyers d\'incendie (satellite, 24 h)','fire','#f97316','ev',['firms']],
   ['fire','Feux de forêt','fire','#ef4444','ev',['eonet','gdacs']],
   ['storm','Tempêtes sévères','storm','#818cf8','ev',['eonet','gdacs']],
   ['flood','Inondations','flood','#38bdf8','ev',['eonet','gdacs']],
@@ -118,11 +122,13 @@ const FAMS = [
  ['secu','Sécurité & géopolitique',[
   ['cyber','Cybermenaces (KEV)','cyber','#a855f7','ev',['kev'],null,true],
   ['conflict','Zones de conflit','shield','#ec4899','ev',null,'UCDP (jeton gratuit) / ACLED (compte)'],
-  ['protest','Manifestations','mega','#fb923c','ev',null,'ACLED (compte gratuit, non commercial)'],
+  ['protest','Manifestations (presse)','mega','#fb923c','ev',['gdelt']],
   ['intel','Points chauds de renseignement','eye','#f97316','ev',null,'Sources publiques à qualifier'],
-  ['shooting','Fusillades','target','#ef4444','ev',null,'Gun Violence Archive (US)'],
-  ['attack','Attaques & agressions','bomb','#f43f5e','ev',null,'GDELT + vérification multi-sources'],
-  ['kidnap','Enlèvements','userx','#8b5cf6','ev',null,'GDELT + vérification multi-sources'],
+  ['roadacc','Accidents de la route (presse)','car','#f59e0b','ev',['gdelt']],
+  ['blast','Incendies & explosions (presse)','fire','#fb7185','ev',['gdelt']],
+  ['shooting','Fusillades (presse)','target','#ef4444','ev',['gdelt']],
+  ['attack','Attaques & agressions (presse)','bomb','#f43f5e','ev',['gdelt']],
+  ['kidnap','Enlèvements (presse)','userx','#8b5cf6','ev',['gdelt']],
   ['theft','Vols & cambriolages','siren','#f59e0b','ev',null,'Open data police locales'],
   ['missing','Disparus & alertes AMBER','usersearch','#d946ef','ev',null,'Flux AMBER officiels']]],
  ['sante','Santé publique',[
@@ -154,7 +160,7 @@ const FAMS = [
 const CAT = {};
 FAMS.forEach(([fk,fn,list])=>list.forEach(([k,n,ic,c,kind,src,cand,nongeo])=>CAT[k]={k,n,ic,c,kind,src:src||null,cand:cand||null,nongeo:!!nongeo,fam:fk,famName:fn}));
 const SEV = [{n:'Indéterminée',c:'#8a98b3'},{n:'Information',c:'#3b82f6'},{n:'Faible',c:'#22c55e'},{n:'Modérée',c:'#eab308'},{n:'Élevée',c:'#f97316'},{n:'Critique',c:'#ef4444'}];
-const PREC = {exact:'Point exact (coordonnées de la source)', approx:'Point approximatif (dernière position connue)', zone:'Centre de zone (polygone simplifié)', pays:'Niveau pays (centroïde) — pas de position précise', none:'Non géolocalisé'};
+const PREC = {ville:'Ville citée dans les articles (géocodage automatique, indicatif)', region:'Région citée dans les articles (géocodage automatique)', cellule:'Cellule de 0,2° (~20 km) regroupant les détections satellite', exact:'Point exact (coordonnées de la source)', approx:'Point approximatif (dernière position connue)', zone:'Centre de zone (polygone simplifié)', pays:'Niveau pays (centroïde) — pas de position précise', none:'Non géolocalisé'};
 const PERIODS = [[1/24,'1 h'],[0.25,'6 h'],[1,'24 h'],[2,'48 h'],[7,'7 j'],[30,'30 j'],[180,'6 mois']];
 
 /* Régions : découpage APPROXIMATIF par boîtes [latMin,latMax,lngMin,lngMax] */
@@ -167,7 +173,7 @@ const REGIONS = {
 const inRegion = (e,r) => REGIONS[r].some(([a,b,c,d])=>e.lat>=a&&e.lat<=b&&e.lng>=c&&e.lng<=d);
 
 /* ============ État ============ */
-const DEFAULT_LAYERS = ['quake','fire','storm','flood','volcano','drought','ice','health','piracy','launch'];
+const DEFAULT_LAYERS = ['cap','quake','fire','storm','flood','volcano','drought','ice','health','piracy','launch'];
 const S = {
   events:[], nongeo:[], ref:{}, refIndex:{}, status:{}, generated:null, source:'?', mode:'multi',
   layers:new Set(DEFAULT_LAYERS), filters:{period:7,minSev:0,regions:new Set(),country:'',q:'',reviewedOnly:false},
@@ -184,7 +190,9 @@ const fmtDate = t => new Date(T(t)).toLocaleString('fr-FR',{day:'2-digit',month:
 const ago = t => { const d=Date.now()-T(t), m=Math.round(Math.abs(d)/60000), fut=d<0; let s; if(m<1) return 'à l\'instant'; if(m<60) s=`${m} min`; else if(m<2880) s=`${Math.round(m/60)} h`; else s=`${Math.round(m/1440)} j`; return fut?`dans ${s}`:`il y a ${s}`; };
 const hav = (a,b) => { const r=Math.PI/180,dLa=(b.lat-a.lat)*r,dLo=(b.lng-a.lng)*r; const x=Math.sin(dLa/2)**2+Math.cos(a.lat*r)*Math.cos(b.lat*r)*Math.sin(dLo/2)**2; return 12742*Math.asin(Math.sqrt(x)); };
 const safeId = id => String(id).replace(/[^A-Za-z0-9-]/g,'-');
-const isApprox = e => !['exact'].includes(e.precision);
+const isApprox = e => !['exact','ville'].includes(e.precision);
+const PRESS = new Set(['roadacc','blast','shooting','attack','kidnap','protest']);
+const sameCountry = (c,f) => c===f || (c||'').endsWith(`(${f})`);
 const extLink = (u,l) => `<a href="${esc(u)}" target="_blank" rel="noopener">${esc(l||u)}</a>`;
 
 /* ============ Pays (local) ============ */
@@ -243,7 +251,7 @@ async function ensureRefLayers(){ await Promise.all([...S.layers].filter(k=>CAT[
 /* ============ Filtrage ============ */
 function visible(){
   const f=S.filters, since=Date.now()-f.period*864e5, out=[];
-  const geo = e => (!f.regions.size||[...f.regions].some(r=>inRegion(e,r))) && (!f.country||e.country===f.country)
+  const geo = e => (!f.regions.size||[...f.regions].some(r=>inRegion(e,r))) && (!f.country||sameCountry(e.country,f.country))
     && (!f.q||(e.title+' '+(e.place||'')+' '+(e.country||'')+' '+(e.titleOrig||'')).toLowerCase().includes(f.q.toLowerCase()));
   for(const e of S.events){ if(!S.layers.has(e.cat)) continue; if(e.cat==='launch'&&e.upcoming){ if(e.t>Date.now()+30*864e5) continue; } else if(e.t<since) continue;
     if(e.sev<f.minSev) continue; if(f.reviewedOnly&&!(e.verif==='officiel-revu'||e.verif==='officiel'||e.nsrc>1)) continue; if(geo(e)) out.push(e); }
@@ -266,8 +274,8 @@ function initGlobe(){
   try{ G=new Globe(el,{animateIn:true}); }catch(e){ G=Globe()(el); }
   G.backgroundColor('#05080f').showGraticules(true).atmosphereAltitude(0.18).width(innerWidth).height(innerHeight)
    .polygonsData(COUNTRIES).polygonAltitude(0.006).polygonsTransitionDuration(0).polygonSideColor(()=>'rgba(20,32,55,.6)')
-   .polygonLabel(f=>{ const n=VIS.filter(e=>!e.ref&&e.country===f.properties.name).length; return `<div style="font:12px Inter;background:rgba(12,19,34,.95);padding:6px 9px;border:1px solid #1d2940;border-radius:8px"><b>${esc(f.properties.name)}</b><br>${n} événement(s) affiché(s)</div>`; })
-   .onPolygonHover(h=>{ G.polygonAltitude(f=>f===h?0.014:0.006); el.style.cursor=h?'pointer':''; })
+   .polygonLabel(f=>{ const n=VIS.filter(e=>!e.ref&&sameCountry(e.country,f.properties.name)).length; return `<div style="font:12px Inter;background:rgba(12,19,34,.95);padding:6px 9px;border:1px solid #1d2940;border-radius:8px"><b>${esc(f.properties.name)}</b><br>${n} événement(s) affiché(s)</div>`; })
+   .onPolygonHover(h=>{ const b=hiOn?0.003:0.006; G.polygonAltitude(f=>f===h?b+0.008:b); el.style.cursor=h?'pointer':''; })
    .onPolygonClick((f,ev,c)=>{ if(S.picking&&c) return setMe(c.lat,c.lng); openCountry(f); })
    .onGlobeClick(c=>{ if(S.picking) setMe(c.lat,c.lng); })
    .htmlElementsData([]).htmlLat(d=>d.lat).htmlLng(d=>d.lng).htmlAltitude(0.012).htmlElement(markerEl).htmlTransitionDuration(0)
@@ -278,9 +286,17 @@ function initGlobe(){
   const ctr=G.controls(); ctr.autoRotate=true; ctr.autoRotateSpeed=0.35;
   el.addEventListener('pointerdown',()=>{ctr.autoRotate=false},{once:true});
   G.pointOfView({lat:30,lng:10,altitude:2.4});
-  const onZ=()=>{ const c=cellFor(G.pointOfView().altitude); if(c!==clusterCell){ clusterCell=c; drawMarkers(); } };
+  const onZ=()=>{ const alt=G.pointOfView().altitude, c=cellFor(alt); if(c!==clusterCell){ clusterCell=c; drawMarkers(); } detailBorders(alt); };
   if(G.onZoom) G.onZoom(onZ); else ctr.addEventListener('change',onZ);
   addEventListener('resize',()=>G.width(innerWidth).height(innerHeight));
+}
+/* Frontières détaillées (Natural Earth 1:50m) chargées à la demande quand on zoome : îles et côtes précises. */
+let HI=null, hiOn=false, hiLoading=false;
+async function detailBorders(alt){
+  if(alt<0.7&&!hiOn){
+    if(!HI&&!hiLoading){ hiLoading=true; try{ const w=await getJSON('https://cdn.jsdelivr.net/npm/world-atlas@2/countries-50m.json',30000); HI=topojson.feature(w,w.objects.countries).features; HI.forEach(f=>f.properties.name=FR_NAMES[f.properties.name]||f.properties.name); }catch(e){ HI=false; } hiLoading=false; }
+    if(HI&&G.pointOfView().altitude<0.7){ hiOn=true; G.polygonsData(HI).polygonAltitude(0.003); }
+  } else if(alt>1.1&&hiOn){ hiOn=false; G.polygonsData(COUNTRIES).polygonAltitude(0.006); }
 }
 function applyMode(){ const m=MODES[S.globeMode]; G.globeMaterial().color.set(m.globe); G.polygonCapColor(m.cap).polygonStrokeColor(()=>m.stroke).atmosphereColor(m.atm); }
 function cellFor(alt){ const steps=[0.25,0.5,1,2,4,8]; const raw=alt*4; return steps.reduce((p,s)=>Math.abs(s-raw)<Math.abs(p-raw)?s:p, steps[0]); }
@@ -297,13 +313,13 @@ function markerEl(d){
   if(d.me){ el.innerHTML='<div class="mk-me"></div>'; el.title='Votre lieu'; return el; }
   if(d.one){ const e=d.one,c=CAT[e.cat];
     el.innerHTML = e.ref ? `<div class="mk-ref" style="background:${c.c}">${svg(c.ic,2.6)}</div>`
-      : `<div class="mk-one${e.sev>=5?' urg':''}" style="background:${c.c};--ring:${SEV[e.sev].c};${e.verif==='annonce'?'opacity:.75;border-style:dashed':''}">${svg(c.ic,2.4)}</div>`;
+      : `<div class="mk-one${e.sev>=5?' urg':''}" style="background:${c.c};--ring:${SEV[e.sev].c};${e.verif==='annonce'||e.verif==='presse'?'opacity:.8;border-style:dashed':''}">${svg(c.ic,2.4)}</div>`;
     el.onclick=ev=>{ev.stopPropagation(); openEvent(e);};
     el.onmouseenter=ev=>tip(ev,`<b>${esc(e.title)}</b><br>${esc(e.place||'')}${e.ref?'':`<br><span style="color:#8a98b3">${ago(e.t)}</span>`}`); el.onmouseleave=()=>tip();
   } else { const c=CAT[d.cat], n=d.items.length;
     el.innerHTML=`<div class="mk-cl${d.ref?' ref':''}" style="background:${c.c};font-size:${n>99?11:13}px;${d.ref?'min-width:26px;height:26px':`box-shadow:0 0 0 3px ${SEV[d.maxSev].c}66,0 2px 10px rgba(0,0,0,.55)`}">${n}</div>`;
     el.title=`${n} × ${c.n}`;
-    el.onclick=ev=>{ev.stopPropagation(); const a=G.pointOfView().altitude; G.pointOfView({lat:d.lat,lng:d.lng,altitude:Math.max(0.06,a/2.6)},800);};
+    el.onclick=ev=>{ev.stopPropagation(); stopRotate(); const a=G.pointOfView().altitude; G.pointOfView({lat:d.lat,lng:d.lng,altitude:Math.max(0.06,a/2.6)},800);};
   }
   return el;
 }
@@ -348,7 +364,7 @@ function layerMeta(c){
   if(!c.src) return {live:false,txt:`<span class="st-na">● À connecter</span>${c.cand?' · '+esc(c.cand):''}`};
   const sts=c.src.map(s=>S.status[s]).filter(Boolean); if(!sts.length) return {live:false,txt:`<span class="st-na">● Indisponible ici</span>`};
   const okS=sts.filter(s=>s.state==='ok'), n=(c.nongeo?S.nongeo:S.events).filter(e=>e.cat===c.k).length;
-  const lbl=okS.length?(Date.now()-S.generated<30*60e3?'<span class="st-live">● LIVE</span>':'<span class="stale">● Données anciennes</span>'):'<span class="st-err">● Erreur</span>';
+  const lbl=okS.length?(PRESS.has(c.k)?'<span class="stale">● PRESSE · non vérifié</span>':Date.now()-S.generated<30*60e3?'<span class="st-live">● LIVE</span>':'<span class="stale">● Données anciennes</span>'):'<span class="st-err">● Erreur</span>';
   return {live:true,txt:`${lbl} · ${n} élément(s)${c.nongeo?' <span class="ng-badge">non géolocalisé</span>':''} · ${sts.map(s=>esc(s.id?.toUpperCase?.()||'')).join(' + ')}`};
 }
 function renderLayers(){
@@ -392,7 +408,7 @@ function openFilters(){
 }
 $('#fApply').onclick=()=>{ draft.q=$('#fq').value.trim(); draft.country=$('#fc').value; S.filters=draft; closeSheets(); renderAll(); flyToFiltered(); };
 $('#fReset').onclick=()=>{ S.filters={period:7,minSev:0,regions:new Set(),country:'',q:'',reviewedOnly:false}; closeSheets(); renderAll(); };
-function flyToFiltered(){ const v=VIS.filter(e=>!e.ref); if(!v.length||(!S.filters.country&&!S.filters.regions.size&&!S.filters.q)) return; G.pointOfView({lat:d3.mean(v,e=>e.lat),lng:d3.mean(v,e=>e.lng),altitude:v.length>1?1.4:0.6},900); }
+function flyToFiltered(){ stopRotate(); const v=VIS.filter(e=>!e.ref); if(!v.length||(!S.filters.country&&!S.filters.regions.size&&!S.filters.q)) return; G.pointOfView({lat:d3.mean(v,e=>e.lat),lng:d3.mean(v,e=>e.lng),altitude:v.length>1?1.4:0.6},900); }
 
 /* ============ Fiche rapide ============ */
 function catSpecific(e){
@@ -403,6 +419,9 @@ function catSpecific(e){
   if(e.cat==='launch'){ r.push(['Statut',e.launchStatus||'—']); if(e.provider) r.push(['Opérateur',e.provider]); if(e.rocket) r.push(['Lanceur',e.rocket]); if(e.mission) r.push(['Mission',e.mission]); }
   if(e.cat==='fireball'){ if(e.energyKt!=null) r.push(['Énergie d\'impact',`${e.energyKt} kt`]); if(e.altKm) r.push(['Altitude',`${e.altKm} km`]); if(e.velKms) r.push(['Vitesse',`${e.velKms} km/s`]); }
   if(e.cat==='piracy'){ if(e.hostility) r.push(['Auteurs',e.hostility]); if(e.victim) r.push(['Victime',e.victim]); }
+  if(e.cat==='cap'){ if(e.authority) r.push(['Autorité',e.authority]); if(e.event) r.push(['Type d\'alerte',e.event]); if(e.zone) r.push(['Zone',e.zone]); if(e.expires) r.push(['Expire',fmtDate(e.expires)]); }
+  if(e.cat==='hotspot'){ r.push(['Détections',String(e.detections)]); r.push(['Puissance cumulée',`${e.frpSum} MW (max ${e.frpMax} MW)`]); r.push(['Capteur',e.sensor||'VIIRS']); }
+  if(e.press){ r.push(['Médias',`${e.nMedia} médias distincts`]); }
   if(e.cat==='cyber'){ r.push(['Éditeur / produit',`${e.vendor} · ${e.product}`]); if(e.ransomware) r.push(['Rançongiciel','Utilisation connue']); if(e.dueDate) r.push(['Échéance CISA',e.dueDate]); }
   return r;
 }
@@ -421,8 +440,8 @@ function openEvent(e){
   const s=SEV[e.sev], dist=S.me&&!isApprox(e)?`${Math.round(hav(S.me,e))} km de votre lieu`:(S.me?'Non calculée (localisation approximative)':'');
   const cd = e.cat==='launch'&&e.upcoming ? `<div style="margin:-2px 0 12px"><span class="countdown">${ago(e.t).replace('dans ','T− ')}</span> <span style="color:var(--mute);font-size:13px">${esc(e.launchStatus||'')}</span></div>`:'';
   $('#eventBody').innerHTML=`
-   <div class="ev-tags"><span class="tag" style="background:${c.c};color:#0b0f19">${esc(c.n)}</span><span class="tag" style="background:${s.c};color:#0b0f19">Gravité ${e.sev||'?'} · ${s.n}</span>${e.nsrc>1?`<span class="tag" style="background:var(--accent);color:#04201b">${e.nsrc} sources</span>`:''}${e.verif==='annonce'?'<span class="tag" style="background:var(--warn);color:#201500">Annoncé</span>':''}</div>
-   <div class="ev-title"><div class="ico" style="background:${c.c};color:#fff">${svg(c.ic)}</div><div><h3>${esc(e.title)}</h3><div style="color:var(--mute);font-size:13px;margin-top:3px">${esc(e.place||'')}</div></div></div>${cd}
+   <div class="ev-tags"><span class="tag" style="background:${c.c};color:#0b0f19">${esc(c.n)}</span><span class="tag" style="background:${s.c};color:#0b0f19">Gravité ${e.sev||'?'} · ${s.n}</span>${e.press?'<span class="tag" style="background:var(--warn);color:#201500">Presse · non vérifié</span>':e.nsrc>1?`<span class="tag" style="background:var(--accent);color:#04201b">${e.nsrc} sources</span>`:''}${e.verif==='annonce'?'<span class="tag" style="background:var(--warn);color:#201500">Annoncé</span>':''}</div>
+   <div class="ev-title"><div class="ico" style="background:${c.c};color:#fff">${svg(c.ic)}</div><div><h3>${esc(e.title)}</h3><div style="color:var(--mute);font-size:13px;margin-top:3px">${esc(e.place||'')}</div></div></div>${cd}${e.press?'<p class="note" style="margin:-4px 0 12px;color:#f8d77a">⚠ Information de presse non vérifiée par une autorité. Le lieu est déduit automatiquement du texte des articles.</p>':''}
    <dl class="kv">
      <dt>Pays</dt><dd>${esc(e.country||(e.lat==null?'—':'En mer / non attribué'))}</dd>
      <dt>${e.upcoming?'Prévu':'Date'}</dt><dd>${fmtDate(e.t)} <span style="color:var(--mute)">(${ago(e.t)})</span></dd>
@@ -435,7 +454,8 @@ function openEvent(e){
    </dl>`;
   openSheet('sEvent'); if(e.lat!=null) flyTo(e);
 }
-function flyTo(e){ const a=G.pointOfView().altitude; G.pointOfView({lat:e.lat-(innerWidth<900?6*Math.min(1,a):0),lng:e.lng,altitude:Math.min(a,1.2)},700); }
+function stopRotate(){ try{ G.controls().autoRotate=false; }catch(e){} }
+function flyTo(e){ stopRotate(); const a=G.pointOfView().altitude; G.pointOfView({lat:e.lat-(innerWidth<900?6*Math.min(1,a):0),lng:e.lng,altitude:Math.min(a,1.2)},700); }
 $('#evFull').onclick=()=>{ if(S.sel) location.hash='ev-'+S.sel.sid; };
 
 /* ============ Rapport complet ============ */
@@ -457,10 +477,11 @@ async function renderReport(e){
      ${e.mag!=null&&e.cat==='quake'?`<dt>Magnitude</dt><dd>${(+e.mag).toFixed(1)}</dd>`:''}
      <dt>Vérification</dt><dd>${esc(e.verifLabel||'—')}</dd><dt>Titre original</dt><dd>${esc(e.titleOrig||'—')}</dd></dl>
      ${e.description||e.missionDesc?`<p style="margin:12px 0 0;font-size:13.5px;line-height:1.5;color:#c9d4e6">${esc(e.description||e.missionDesc)}</p>`:''}</div>
-   <div class="card2"><h4>Informations non confirmées</h4><p style="margin:0;color:var(--mute);font-size:13.5px">Aucune. GLOBAL ALERT n'affiche que les champs publiés par les sources officielles listées ci-dessous ; aucun bilan ni détail n'est ajouté ou déduit.</p></div>
+   ${e.instruction?`<div class="card2"><h4>Consignes de l'autorité</h4><p style="margin:0;font-size:13.5px;line-height:1.5">${esc(e.instruction)}</p></div>`:''}
+   <div class="card2"><h4>Informations non confirmées</h4><p style="margin:0;color:var(--mute);font-size:13.5px">${e.press?`<b style="color:#f8d77a">L'ensemble de cet événement est non confirmé.</b> Il provient de ${e.nMedia} médias distincts ; aucune autorité ne l'a validé. Catégorie déduite du titre des articles, lieu déduit automatiquement de leur texte : des erreurs sont possibles.`:'Aucune. GLOBAL ALERT n\'affiche que les champs publiés par les sources officielles listées ci-dessous ; aucun bilan ni détail n\'est ajouté ou déduit.'}</p></div>
    <div class="card2"><h4>Pourquoi cette gravité ?</h4><p style="margin:0;font-size:13.5px;line-height:1.5">${esc(e.sevWhy||'—')}</p></div>
    <div class="card2"><h4>Chronologie</h4><div class="chrono">${chrono}</div></div>
-   <div class="card2"><h4>Sources consultables (${e.sources.length})</h4><ul style="margin:0;padding-left:18px;font-size:13.5px;line-height:1.7;word-break:break-all">${e.sources.map(x=>`<li>${esc(x.n)} — ${extLink(x.u)}</li>`).join('')}</ul></div>
+   <div class="card2"><h4>Sources consultables (${e.sources.length})</h4><ul style="margin:0;padding-left:18px;font-size:13.5px;line-height:1.7;word-break:break-all">${e.sources.map(x=>`<li>${esc(x.n)} — ${extLink(x.u,x.t||x.u)}</li>`).join('')}</ul></div>
    <div class="card2" id="nearby"><h4>Infrastructures à proximité (&lt; 300 km)</h4><p style="margin:0;color:var(--mute);font-size:13px">${e.lat==null?'Événement non géolocalisé.':'Calcul en cours…'}</p></div>
    ${related.length?`<div class="card2"><h4>Événements liés (même catégorie, &lt; 500 km)</h4>${related.map(feedRow).join('')}</div>`:''}
    <div class="split"><button class="btn sec" id="cp">Copier le lien</button>${e.lat!=null?'<button class="btn pri" id="go">Voir sur le globe</button>':''}</div>
@@ -478,6 +499,9 @@ async function renderReport(e){
 function summary(e){
   const src=e.sources.map(s=>s.n).filter((v,i,a)=>a.indexOf(v)===i).slice(0,3).join(', ');
   if(e.cat==='quake') return `Un séisme de magnitude ${(+e.mag).toFixed(1)} a été enregistré ${esc(e.place)}${e.country?` (${esc(e.country)})`:''} le ${fmtDate(e.t)}${e.depth!=null?`, à environ ${(+e.depth).toFixed(0)} km de profondeur`:''}, selon ${esc(src)}. ${e.verif==='officiel-revu'?'Les paramètres ont été revus par un sismologue.':'Les paramètres sont issus du traitement automatique et peuvent encore être révisés.'}${e.gdacsLevel?` Le GDACS lui attribue une alerte « ${esc(e.gdacsLevel)} ».`:''}`;
+  if(e.cat==='cap') return `Alerte officielle émise par ${esc(e.authority||'l\'autorité compétente')}${e.country?` (${esc(e.country)})`:''} : « ${esc(e.titleOrig||e.event)} »${e.zone?`, zone : ${esc(e.zone)}`:''}. Valable à partir du ${fmtDate(e.t)}${e.expires?` jusqu'au ${fmtDate(e.expires)}`:''}. Texte d'origine${e.lang?` (${esc(e.lang)})`:''} transmis au format CAP et relayé par l'IFRC Alert Hub.`;
+  if(e.cat==='hotspot') return `${e.detections} anomalie(s) thermique(s) détectée(s) par satellite (${esc(e.sensor||'VIIRS')}) au cours des dernières 24 h dans cette zone d'environ 20 km${e.country?` (${esc(e.country)})`:''}. Il peut s'agir de feux de végétation, de brûlis agricoles ou de sources industrielles (torchères) : ce n'est pas une confirmation d'incendie au sol.`;
+  if(e.press) return `${e.nMedia} médias distincts rapportent un événement de type « ${esc(CAT[e.cat].n.replace(' (presse)',''))} » à ${esc(e.place)}${e.country?` (${esc(e.country)})`:''}, entre le ${fmtDate(e.t)} et le ${fmtDate(e.updated)}. Titre représentatif : « ${esc(e.titleOrig)} ». Information non vérifiée par une autorité.`;
   if(e.cat==='launch') return `${e.upcoming?'Lancement prévu':'Lancement'} « ${esc(e.titleOrig)} »${e.provider?` opéré par ${esc(e.provider)}`:''} depuis ${esc(e.padName||'un site non précisé')}${e.country?` (${esc(e.country)})`:''}, ${e.upcoming?'programmé le':'le'} ${fmtDate(e.t)}. Statut publié : ${esc(e.launchStatus||'inconnu')}.${e.upcoming?' Une date prévue peut évoluer jusqu\'au dernier moment.':''}`;
   if(e.cat==='health') return `L'Organisation mondiale de la santé a publié une note « Disease Outbreak News » le ${fmtDate(e.t)} : « ${esc(e.titleOrig)} ». La position affichée est le centre du pays concerné, pas le lieu exact des cas.`;
   if(e.cat==='cyber') return `La CISA a ajouté ${esc(e.titleOrig)} à son catalogue des vulnérabilités activement exploitées le ${fmtDate(e.t)}. Produit concerné : ${esc(e.vendor)} ${esc(e.product)}.${e.ransomware?' Une utilisation par des rançongiciels est connue.':''}`;
@@ -529,7 +553,7 @@ function renderSources(){
 
 /* ============ Pays ============ */
 function openCountry(f){
-  const name=f.properties.name, list=VIS.filter(e=>!e.ref&&e.country===name);
+  const name=f.properties.name, list=VIS.filter(e=>!e.ref&&sameCountry(e.country,name));
   $('#cTitle').textContent=name;
   $('#cBody').innerHTML=`<p style="margin:0 0 12px;color:var(--mute)">${list.length} événement(s) affiché(s) avec les couches et filtres actuels.</p>
    <div class="split" style="margin-bottom:12px"><button class="btn pri" id="cf">Filtrer sur ce pays</button><button class="btn sec" id="cz">Zoomer</button></div>
@@ -549,7 +573,7 @@ function openNear(){
    <div class="split" style="margin-bottom:14px"><button class="btn pri" id="nPick">Choisir sur le globe</button>${navigator.geolocation?'<button class="btn sec" id="nGeo">Me localiser</button>':''}</div>
    <div class="fam" style="margin-top:0">Rayon</div><div class="chips" id="nR">${[5,10,25,50,100,250,500].map(r=>`<button class="chip${S.radius===r?' on':''}" data-v="${r}">${r} km</button>`).join('')}</div>
    <p class="note" id="nMsg"></p>
-   ${S.me?`<div class="fam">${near.length} alerte(s) dans un rayon de ${S.radius} km</div><div class="card2" style="padding:4px 14px">${near.map(([e,d])=>feedRow(e).replace('</small>',` · ${Math.round(d)} km</small>`)).join('')||'<p style="color:var(--mute)">Aucune alerte dans ce rayon.</p>'}</div>
+   ${S.me?`<div class="fam">${near.length} alerte(s) dans un rayon de ${S.radius} km</div><div class="card2" style="padding:4px 14px">${near.map(([e,d])=>feedRow(e).replace('</small>',` · ${e.precision==='ville'?'~':''}${Math.round(d)} km</small>`)).join('')||'<p style="color:var(--mute)">Aucune alerte dans ce rayon.</p>'}</div>
      <p class="note">Les événements à localisation approximative (zones, centroïdes, pays) sont exclus du calcul de distance.</p>`:''}`;
   $('#nPick').onclick=()=>{ closeSheets(); S.picking=true; $('#pickhint').style.display='block'; G.controls().autoRotate=false; };
   if($('#nGeo')) $('#nGeo').onclick=()=>{ $('#nMsg').textContent='Demande de localisation…';
@@ -558,7 +582,7 @@ function openNear(){
   $('#nearBody').querySelectorAll('[data-id]').forEach(r=>r.onclick=()=>{ closeSheets(); openEvent(byId(r.dataset.id)); });
   openSheet('sNear');
 }
-function setMe(lat,lng){ S.me={lat,lng}; try{localStorage.setItem('ga_me',JSON.stringify(S.me));}catch(e){} S.picking=false; $('#pickhint').style.display='none'; renderNear(); drawMarkers(); G.pointOfView({lat,lng,altitude:0.7},900); openNear(); }
+function setMe(lat,lng){ stopRotate(); S.me={lat,lng}; try{localStorage.setItem('ga_me',JSON.stringify(S.me));}catch(e){} S.picking=false; $('#pickhint').style.display='none'; renderNear(); drawMarkers(); G.pointOfView({lat,lng,altitude:0.7},900); openNear(); }
 function renderNear(){
   const box=$('#near'); $('#fNear').classList.toggle('on',!!S.me);
   if(!S.me||$('#banner').style.display==='block'){ box.style.display='none'; return; }

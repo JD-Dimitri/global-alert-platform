@@ -38,6 +38,13 @@ Normalisation → déduplication/fusion → géolocalisation pays (point dans po
 | [NASA JPL CNEOS](https://cneos.jpl.nasa.gov/fireballs/) | Bolides | Domaine public |
 | [OMS — Disease Outbreak News](https://www.who.int/emergencies/disease-outbreak-news) | Alertes sanitaires (niveau pays) | OMS, non commercial avec attribution |
 | [CISA KEV](https://www.cisa.gov/known-exploited-vulnerabilities-catalog) | Vulnérabilités exploitées (non géolocalisées) | Domaine public |
+| [IFRC Alert Hub](https://alerthub.ifrc.org/) | **Alertes officielles CAP** des autorités (≈130 pays : météo, crues, incendies, santé, sécurité…) | Alertes publiques officielles |
+| [NASA FIRMS](https://firms.modaps.eosdis.nasa.gov/) | Foyers d'incendie détectés par satellite (24 h, cellules de 0,2°) | Domaine public |
+| [EMSC](https://www.seismicportal.eu/) | Séismes, y compris petites magnitudes (fusionnés avec l'USGS) | Libre avec attribution |
+| [GDELT 2.0 GKG](https://www.gdeltproject.org/) | **Presse — non vérifié** : accidents de la route, incendies/explosions, fusillades, agressions, enlèvements, manifestations | Libre avec attribution |
+
+> **Couches « presse »** : catégorie déduite du titre (mots-clés FR/EN/ES/PT/DE/IT), lieu géocodé automatiquement par GDELT,
+> événement retenu **uniquement si au moins 2 médias distincts** en parlent (fenêtre 36 h, même ville). Affichées « NON VÉRIFIÉ », désactivées par défaut.
 
 ### Référentiels (hebdomadaire)
 
@@ -57,7 +64,7 @@ Normalisation → déduplication/fusion → géolocalisation pays (point dans po
 
 ### Catégories en attente (pas encore de source gratuite et fiable branchée)
 
-Conflits (UCDP — jeton gratuit à demander ; ACLED — compte), manifestations, fusillades, attaques, enlèvements, vols, disparitions/AMBER, pipelines (Global Energy Monitor), requins, crocodiles, zones à risque de piraterie.
+Conflits (UCDP — jeton gratuit à demander ; ACLED — compte), vols, disparitions/AMBER, pipelines (Global Energy Monitor), requins, crocodiles, zones à risque de piraterie.
 
 ## Mise en service
 

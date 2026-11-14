@@ -6,7 +6,8 @@ const require = createRequire(import.meta.url);
 countries.registerLocale(require('i18n-iso-countries/langs/fr.json'));
 const world = require('world-atlas/countries-110m.json');
 const fr = { 'N. Cyprus': 'Chypre du Nord', Somaliland: 'Somaliland', Kosovo: 'Kosovo' };
-for (const g of world.objects.countries.geometries) { const a2 = g.id && countries.numericToAlpha2(g.id); const n = a2 && countries.getName(a2, 'fr'); if (n) fr[g.properties.name] = n; }
+const world50 = require('world-atlas/countries-50m.json');
+for (const g of world50.objects.countries.geometries) { const a2 = g.id && countries.numericToAlpha2(g.id); const n = a2 && countries.getName(a2, 'fr'); if (n) fr[g.properties.name] = n; }
 const html = readFileSync('src/head.html', 'utf8') + readFileSync('src/body.html', 'utf8')
   .replace('/*__WORLD__*/null', JSON.stringify(world)).replace('/*__FR__*/{}', JSON.stringify(fr));
 writeFileSync(process.argv[2] || 'index.html', html);

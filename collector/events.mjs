@@ -2,6 +2,7 @@
 // Uniquement des sources publiques, gratuites et officielles ou institutionnelles.
 // Sortie : data/events.json + data/status.json
 import { http, runConnector, countryOf, countryByName, hav, R, iso, readJSON, writeJSON } from './lib.mjs';
+import { alerthub, firms, emsc, gdeltArticles, clusterPress, PRESS_CATS, CAP_CAT_FR } from './local.mjs';
 
 const OUT = process.env.OUT_DIR || 'data';
 const PREV = process.env.PREV_DIR || 'prev';
@@ -30,8 +31,15 @@ const C = {
   ll2: { id: 'll2', name: 'Launch Library 2 (The Space Devs)', url: 'https://thespacedevs.com/llapi', licence: 'Gratuit (offre libre, 15 requêtes/h), attribution', cats: ['launch'] },
   cneos: { id: 'cneos', name: 'NASA JPL CNEOS — Fireballs', url: 'https://cneos.jpl.nasa.gov/fireballs/', licence: 'Domaine public (NASA/JPL)', cats: ['fireball'] },
   who: { id: 'who', name: 'OMS — Disease Outbreak News', url: 'https://www.who.int/emergencies/disease-outbreak-news', licence: 'OMS — réutilisation non commerciale avec attribution', cats: ['health'] },
-  kev: { id: 'kev', name: 'CISA — Known Exploited Vulnerabilities', url: 'https://www.cisa.gov/known-exploited-vulnerabilities-catalog', licence: 'Domaine public (gouvernement des États-Unis)', cats: ['cyber'] }
+  kev: { id: 'kev', name: 'CISA — Known Exploited Vulnerabilities', url: 'https://www.cisa.gov/known-exploited-vulnerabilities-catalog', licence: 'Domaine public (gouvernement des États-Unis)', cats: ['cyber'] },
+  alerthub: { id: 'alerthub', name: 'IFRC Alert Hub — alertes officielles CAP', url: 'https://alerthub.ifrc.org/', licence: 'Alertes publiques des autorités officielles (réutilisation libre avec attribution)', cats: ['cap'] },
+  firms: { id: 'firms', name: 'NASA FIRMS — anomalies thermiques (24 h)', url: 'https://firms.modaps.eosdis.nasa.gov/', licence: 'Domaine public (NASA)', cats: ['hotspot'] },
+  emsc: { id: 'emsc', name: 'EMSC — Centre sismologique euro-méditerranéen', url: 'https://www.seismicportal.eu/', licence: 'Libre avec attribution (EMSC)', cats: ['quake'] },
+  gdelt: { id: 'gdelt', name: 'GDELT 2.0 — presse mondiale (65 langues)', url: 'https://www.gdeltproject.org/', licence: 'Libre avec attribution ; articles © leurs éditeurs', cats: Object.keys(PRESS_CATS) }
 };
+const prevPress = readJSON(`${PREV}/press-cache.json`, []);
+let pressArticles = null;
+async function gdelt() { pressArticles = await gdeltArticles(prevPress); return clusterPress(pressArticles); }
 
 async function usgs() {
   const [a, b] = await Promise.all([
@@ -204,7 +212,8 @@ const ll2Due = !prevStatus.ll2 || prevStatus.ll2.state !== 'ok' || now - Date.pa
 const results = await Promise.all([
   runConnector(C.usgs, usgs, status), runConnector(C.eonet, eonet, status), runConnector(C.gdacs, gdacs, status),
   runConnector(C.asam, asam, status), ll2Due ? runConnector(C.ll2, ll2, status) : Promise.resolve(null),
-  runConnector(C.cneos, cneos, status), runConnector(C.who, who, status), runConnector(C.kev, kev, status)]);
+  runConnector(C.cneos, cneos, status), runConnector(C.who, who, status), runConnector(C.kev, kev, status),
+  runConnector(C.alerthub, alerthub, status), runConnector(C.firms, firms, status), runConnector(C.emsc, emsc, status), runConnector(C.gdelt, gdelt, status)]);
 const byId = Object.fromEntries(Object.keys(C).map((k, i) => [k, results[i]]));
 
 // En cas d'échec ponctuel (ou LL2 non dû), on réutilise la dernière collecte réussie, en le signalant.
@@ -219,9 +228,10 @@ for (const k of Object.keys(C)) {
 
 /* ===================== Fusion / déduplication multi-sources ===================== */
 let all = Object.entries(byId).flatMap(([k, list]) => (list || []).map(e => ({ ...e, via: e.via || [k] })));
-const primary = all.filter(e => !e.id.startsWith('gdacs-'));
-const gd = all.filter(e => e.id.startsWith('gdacs-'));
-const tol = { quake: [100, 5 * 60e3], storm: [400, 4 * 864e5], flood: [200, 10 * 864e5], fire: [100, 7 * 864e5], volcano: [50, 30 * 864e5], drought: [500, 60 * 864e5] };
+const isSecondary = e => e.id.startsWith('gdacs-') || e.id.startsWith('emsc-');
+const primary = all.filter(e => !isSecondary(e));
+const gd = all.filter(isSecondary);
+const tol = { quake: [100, 3 * 60e3], storm: [400, 4 * 864e5], flood: [200, 10 * 864e5], fire: [100, 7 * 864e5], volcano: [50, 30 * 864e5], drought: [500, 60 * 864e5] };
 let merged = 0;
 for (const g of gd) {
   const [dk, dt] = tol[g.cat] || [100, 864e5];
@@ -236,9 +246,9 @@ for (const g of gd) {
   if (best) {
     merged++;
     best.sources.push(...g.sources); best.via = [...new Set([...best.via, ...g.via])];
-    best.gdacsLevel = g.gdacsLevel;
+    if (g.gdacsLevel) best.gdacsLevel = g.gdacsLevel;
     if (g.sev > best.sev) { best.sev = g.sev; best.sevWhy = g.sevWhy; }
-    else if (g.sev) best.sevWhy += ` · GDACS : alerte « ${g.gdacsLevel} ».`;
+    else if (g.gdacsLevel) best.sevWhy += ` · GDACS : alerte « ${g.gdacsLevel} ».`;
   } else primary.push(g);
 }
 all = primary;
@@ -248,7 +258,7 @@ const FR = { fire: 'Feu de forêt', storm: 'Tempête', flood: 'Inondation', volc
   piracy: 'Acte de piraterie / brigandage', launch: 'Lancement', fireball: 'Bolide', health: 'Alerte sanitaire', cyber: 'Vulnérabilité exploitée' };
 const DIRS = { N: 'N', S: 'S', E: 'E', W: 'O', NE: 'NE', NW: 'NO', SE: 'SE', SW: 'SO', NNE: 'NNE', NNW: 'NNO', SSE: 'SSE', SSW: 'SSO', ENE: 'ENE', ESE: 'ESE', WNW: 'ONO', WSW: 'OSO' };
 const cleanName = s => (s || '').replace(/^(Wildfires?|Forest fires?|Tropical (Storm|Cyclone|Depression)|Typhoon|Hurricane|Super Typhoon|Cyclone|Volcano|Floods?|Iceberg|Drought|Earthquake)\s*[-–:]?\s*/i, '').replace(/^(in|at|near)\s+/i, '').trim();
-const VERIF = { 'officiel-revu': 'Officiel — paramètres revus par un sismologue', 'officiel-auto': 'Officiel — calcul automatique, non encore revu', officiel: 'Source officielle', annonce: 'Annoncé — non encore confirmé' };
+const VERIF = { presse: 'Rapporté par la presse — NON VÉRIFIÉ', 'officiel-revu': 'Officiel — paramètres revus par un sismologue', 'officiel-auto': 'Officiel — calcul automatique, non encore revu', officiel: 'Source officielle', annonce: 'Annoncé — non encore confirmé' };
 
 for (const e of all) {
   const seenU = new Set(); e.sources = e.sources.filter(s => s.u && !seenU.has(s.u) && seenU.add(s.u));
@@ -256,8 +266,15 @@ for (const e of all) {
   e.country = c?.name || null; e.iso2 = c?.iso2 || null; delete e.countryForced;
   if (e.cat === 'quake') {
     const m = (e.placeOrig || '').match(/^(\d+)\s*km\s+([NSEW]{1,3})\s+of\s+(.+)$/i);
-    e.place = m ? `à ${m[1]} km au ${DIRS[m[2].toUpperCase()] || m[2]} de ${m[3]}` : (e.placeOrig || e.titleOrig || '');
+    const tc = s => s && s === s.toUpperCase() ? s.toLowerCase().replace(/(^|[\s,-])\S/g, c => c.toUpperCase()) : s;
+    e.place = m ? `à ${m[1]} km au ${DIRS[m[2].toUpperCase()] || m[2]} de ${m[3]}` : tc(e.placeOrig || e.titleOrig || '');
     if (!e.title) e.title = `Séisme de magnitude ${e.mag?.toFixed?.(1) ?? '?'}`;
+  } else if (e.cat === 'cap') {
+    e.title = `${CAP_CAT_FR[e.capCat] || 'Alerte'} — ${e.titleOrig || e.event}`; e.place = e.zone || e.country || '';
+  } else if (e.cat === 'hotspot') {
+    e.title = `Foyer(s) d'incendie détecté(s) par satellite — ${e.detections} détection(s)`; e.place = e.country || 'Zone non attribuée';
+  } else if (e.press) {
+    e.title = `${PRESS_CATS[e.cat].fr} — ${e.titleOrig}`; e.place = e.placeOrig || '';
   } else if (e.cat === 'launch') {
     e.title = `${e.upcoming ? 'Lancement prévu' : 'Lancement'} — ${e.titleOrig}`; e.place = e.padName || '';
   } else if (e.cat === 'health') {
@@ -272,8 +289,8 @@ for (const e of all) {
     const n = cleanName(e.titleOrig).replace(/^Prescribed Fire\s*/i, ''); e.title = `${e.prescribed ? 'Brûlage dirigé' : FR[e.cat]} — ${n || e.titleOrig}`; e.place = n || e.titleOrig;
   }
   const indep = new Set(e.via).size;
-  e.verifLabel = (VERIF[e.verif] || 'Source officielle') + (indep > 1 ? ` · confirmé par ${indep} sources indépendantes` : '');
-  e.nsrc = indep;
+  e.verifLabel = e.press ? `Rapporté par ${e.nMedia} médias distincts — NON VÉRIFIÉ` : (VERIF[e.verif] || 'Source officielle') + (indep > 1 ? ` · confirmé par ${indep} sources indépendantes` : '');
+  e.nsrc = e.press ? e.nMedia : indep;
 }
 
 const events = all.filter(e => e.lat != null && e.lng != null).sort((a, b) => Date.parse(b.time) - Date.parse(a.time));
@@ -281,6 +298,7 @@ const nongeo = all.filter(e => e.lat == null || e.lng == null).sort((a, b) => Da
 
 writeJSON(`${OUT}/events.json`, { generated: new Date(now).toISOString(), merged, events, nongeo });
 writeJSON(`${OUT}/status.json`, status);
+writeJSON(`${OUT}/press-cache.json`, pressArticles || prevPress.filter(a => now - a.ts < 48 * 3600e3));
 console.log(`→ ${events.length} événements géolocalisés, ${nongeo.length} non géolocalisés, ${merged} fusions multi-sources.`);
 const okN = Object.values(status).filter(s => s.state === 'ok').length;
 if (!okN) { console.error('Aucun connecteur opérationnel.'); process.exitCode = 1; }
