@@ -6,6 +6,11 @@
 .stale{color:var(--warn)}
 .countdown{font:700 22px "Space Grotesk",Inter,sans-serif;color:var(--accent)}
 .split{display:flex;gap:8px;flex-wrap:wrap}
+#installBtn{display:none;align-items:center;gap:6px;padding:7px 12px;border-radius:999px;background:var(--accent);color:#04201b;font:700 12px "Space Grotesk",Inter,sans-serif;letter-spacing:.05em;white-space:nowrap}
+#installBtn svg{width:15px;height:15px}
+.brand{white-space:nowrap}
+@media(max-width:440px){.brand{font-size:15px}.brand small{display:none}.brand svg{width:26px;height:26px}#top{gap:8px}.pill{padding:6px 9px;font-size:11px}}
+.steps{margin:0;padding-left:20px;line-height:1.8;font-size:14.5px}
 </style>
 </head>
 <body>
@@ -18,6 +23,7 @@
     <div>GLOBAL ALERT<small>THE WORLD, LIVE & MAPPED</small></div>
   </div>
   <div class="grow"></div>
+  <button id="installBtn" aria-label="Installer l'application GAP"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>GAP</button>
   <span id="status" class="pill off"><span class="dot"></span><span id="statusTxt">…</span></span>
 </div>
 <div id="banner"></div>
@@ -53,6 +59,7 @@
   <footer><button class="btn sec" data-close style="flex:0 0 auto;padding-left:18px;padding-right:18px">✕</button><button class="btn pri" id="evFull">Voir le rapport complet ›</button></footer></div>
 <div class="sheet" id="sNear"><div class="grab"></div><header><h2 class="h">Près de vous</h2><button class="done" data-close>Fermer</button></header><div class="body" id="nearBody"></div></div>
 <div class="sheet" id="sCountry"><div class="grab"></div><header><h2 class="h" id="cTitle"></h2><button class="done" data-close>Fermer</button></header><div class="body" id="cBody"></div></div>
+<div class="sheet" id="sInstall"><div class="grab"></div><header><h2 class="h">Installer GAP</h2><button class="done" data-close>Fermer</button></header><div class="body" id="installBody"></div></div>
 <div id="tip"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
@@ -352,7 +359,7 @@ function renderStatus(){
   if(S.source==='none'){ st.className='pill off'; tx.textContent='HORS LIGNE';
     b.innerHTML=`<button aria-label="Fermer" onclick="this.parentNode.style.display='none'">✕</button><b>Aucune donnée disponible.</b> Ni les données collectées ni les flux publics n'ont pu être chargés (aperçu sandboxé ou réseau). Ouvrez la version hébergée du site.`; b.style.display='block'; }
   else if(ok.length && age<30*60e3){ st.className='pill live'; tx.textContent='LIVE · '+new Date(S.generated).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}); }
-  else { st.className='pill demo'; tx.textContent='DONNÉES · '+ago(S.generated);
+  else { st.className='pill demo'; tx.textContent='MAJ '+ago(S.generated);
     b.innerHTML=`<button aria-label="Fermer" onclick="this.parentNode.style.display='none'">✕</button><b>Données non actualisées.</b> Dernière collecte réussie ${ago(S.generated)}. Les connecteurs sont peut-être en panne : voir l'onglet Sources.`; b.style.display='block'; }
 }
 function updateBadge(){ const n=activeFilterCount(), b=$('#fBadge'); b.style.display=n?'grid':'none'; b.textContent=n; }
@@ -630,6 +637,26 @@ function route(){
   $('#fabs').style.display=h?'none':'flex';
 }
 addEventListener('hashchange',route);
+
+/* ============ Application installable (PWA) ============ */
+let deferredInstall=null;
+const isStandalone=()=>matchMedia('(display-mode: standalone)').matches||navigator.standalone===true;
+function updateInstallBtn(){ $('#installBtn').style.display=isStandalone()?'none':'inline-flex'; }
+addEventListener('beforeinstallprompt',e=>{ e.preventDefault(); deferredInstall=e; updateInstallBtn(); });
+addEventListener('appinstalled',()=>{ deferredInstall=null; updateInstallBtn(); toast('GAP est installée sur votre écran d\'accueil'); });
+$('#installBtn').onclick=async()=>{
+  if(deferredInstall){ deferredInstall.prompt(); try{ await deferredInstall.userChoice; }catch(e){} deferredInstall=null; return; }
+  const ua=navigator.userAgent, ios=/iPhone|iPad|iPod/i.test(ua), opera=/OPR|Opera/i.test(ua), samsung=/SamsungBrowser/i.test(ua);
+  $('#installBody').innerHTML=`<p style="margin:0 0 14px;color:var(--mute);font-size:13.5px">GAP s'ouvrira en plein écran depuis une icône sur votre écran d'accueil, comme une application.</p>`+
+    (ios?`<ol class="steps"><li>Ouvrez cette page dans <b>Safari</b></li><li>Touchez <b>Partager</b> (carré avec une flèche)</li><li>Choisissez <b>Sur l'écran d'accueil</b></li><li>Validez avec <b>Ajouter</b></li></ol>`
+    :opera?`<ol class="steps"><li>Touchez le menu <b>⋮</b> (ou le logo O)</li><li>Choisissez <b>Ajouter à…</b> puis <b>Écran d'accueil</b></li><li>Validez</li></ol>`
+    :samsung?`<ol class="steps"><li>Touchez le menu <b>≡</b></li><li>Choisissez <b>Ajouter page à</b> puis <b>Écran d'accueil</b></li></ol>`
+    :`<ol class="steps"><li>Touchez le menu <b>⋮</b> du navigateur</li><li>Choisissez <b>Installer l'application</b> ou <b>Ajouter à l'écran d'accueil</b></li><li>Validez</li></ol>`)+
+    `<p class="note">Si l'option n'apparaît pas, rechargez la page une fois : le navigateur doit d'abord enregistrer l'application.</p>`;
+  openSheet('sInstall');
+};
+updateInstallBtn();
+if('serviceWorker' in navigator && location.protocol==='https:') addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
 
 /* ============ Démarrage ============ */
 (async function(){
