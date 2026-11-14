@@ -1,0 +1,16 @@
+{
+  "source": "U.S. Energy Information Administration — World Oil Transit Chokepoints (2024)",
+  "sourceUrl": "https://www.eia.gov/international/analysis/special-topics/World_Oil_Transit_Chokepoints",
+  "precision": "Point représentatif du passage (position du détroit ou du canal)",
+  "items": [
+    {"n":"Détroit d'Ormuz","lat":26.57,"lng":56.25,"d":"Golfe Persique ↔ golfe d'Oman — principal point de passage pétrolier mondial"},
+    {"n":"Détroit de Malacca","lat":2.5,"lng":101.4,"d":"Océan Indien ↔ mer de Chine méridionale"},
+    {"n":"Canal de Suez et oléoduc SUMED","lat":30.6,"lng":32.33,"d":"Mer Rouge ↔ Méditerranée"},
+    {"n":"Détroit de Bab el-Mandeb","lat":12.58,"lng":43.33,"d":"Mer Rouge ↔ golfe d'Aden"},
+    {"n":"Détroits danois","lat":55.65,"lng":12.65,"d":"Mer Baltique ↔ mer du Nord"},
+    {"n":"Détroits turcs (Bosphore, Dardanelles)","lat":41.12,"lng":29.07,"d":"Mer Noire ↔ Méditerranée"},
+    {"n":"Canal de Panama","lat":9.08,"lng":-79.68,"d":"Atlantique ↔ Pacifique"},
+    {"n":"Cap de Bonne-Espérance","lat":-34.36,"lng":18.47,"d":"Route de contournement Atlantique ↔ océan Indien"},
+    {"n":"Détroit de Gibraltar","lat":35.95,"lng":-5.6,"d":"Atlantique ↔ Méditerranée (hors liste EIA, passage maritime majeur)"}
+  ]
+}

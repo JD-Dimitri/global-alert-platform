@@ -1,0 +1,94 @@
+name: Collecte & déploiement
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'      # événements toutes les 10 min (GitHub peut retarder les tâches planifiées)
+  workflow_dispatch:
+    inputs:
+      reference:
+        description: 'Forcer la mise à jour des référentiels (infrastructures)'
+        type: boolean
+        default: false
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: collect
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci --no-audit --no-fund
+
+      - name: Récupérer la collecte précédente (branche data)
+        run: |
+          mkdir -p prev
+          if git fetch --depth=1 origin data 2>/dev/null; then
+            git --work-tree=prev checkout origin/data -- . && echo "Collecte précédente restaurée"
+          fi
+          # Référentiels : on part de la dernière version publiée (sinon de la graine committée dans main)
+          if [ -d prev/ref ]; then rm -rf data/ref && cp -r prev/ref data/ref; fi
+
+      - name: Référentiels (hebdomadaire)
+        env:
+          FORCE: ${{ inputs.reference }}
+        run: |
+          DUE=$(node -e '
+            const fs=require("fs"); let ix={}; try{ix=JSON.parse(fs.readFileSync("data/ref/index.json"))}catch{}
+            const keys=["airport","nuclear","dam","dc","spaceport","port","cable","choke","bourse","milbase","milair","border","observ"];
+            const age=t=>Date.now()-Date.parse(t||0);
+            // OK → rafraîchi après 7 j ; en échec → nouvel essai après 24 h (évite de solliciter les API toutes les 10 min)
+            const stale=keys.filter(k=>!ix[k]||(ix[k].state==="ok"?age(ix[k].generated)>7*864e5:age(ix[k].lastTry||ix[k].generated)>864e5));
+            console.log(stale.join(" "));')
+          if [ "$FORCE" = "true" ]; then DUE=""; node collector/reference.mjs || true
+          elif [ -n "$DUE" ]; then echo "À rafraîchir : $DUE"; node collector/reference.mjs $DUE || true
+          else echo "Référentiels à jour"; fi
+
+      - name: Événements
+        env:
+          OUT_DIR: data
+          PREV_DIR: prev
+        run: node collector/events.mjs
+
+      - name: Construire le site
+        run: |
+          mkdir -p _site
+          node collector/build-site.mjs _site/index.html
+          cp -r data _site/data
+          cp README.md _site/ 2>/dev/null || true
+          touch _site/.nojekyll
+
+      - name: Publier les données (branche data, un seul commit)
+        run: |
+          cd data
+          git init -q -b data
+          git config user.name "global-alert-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add -A
+          git commit -qm "Collecte $(date -u +%Y-%m-%dT%H:%MZ)"
+          git push -fq "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" data:data
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - id: deploy
+        uses: actions/deploy-pages@v4

@@ -1,0 +1,607 @@
+<style>
+.mk-ref{width:16px;height:16px;border-radius:5px;display:grid;place-items:center;border:1.5px solid rgba(255,255,255,.75);box-shadow:0 1px 5px rgba(0,0,0,.5)}
+.mk-ref svg{width:10px;height:10px;color:#fff}
+.mk-cl.ref{border-radius:8px;opacity:.92}
+.ng-badge{display:inline-block;padding:2px 7px;border-radius:6px;background:var(--panel2);border:1px solid var(--line);font-size:11px;color:var(--mute);margin-left:6px}
+.stale{color:var(--warn)}
+.countdown{font:700 22px "Space Grotesk",Inter,sans-serif;color:var(--accent)}
+.split{display:flex;gap:8px;flex-wrap:wrap}
+</style>
+</head>
+<body>
+<div id="loading"><div><svg width="54" height="54" viewBox="0 0 48 48" fill="none"><circle cx="24" cy="24" r="20" stroke="#1d2940" stroke-width="3"/><path d="M24 4a20 20 0 0 1 20 20" stroke="#2ee6c5" stroke-width="3" stroke-linecap="round"/></svg><br>Chargement du globe…</div></div>
+<div id="globe"></div>
+
+<div id="top">
+  <div class="brand h">
+    <svg width="30" height="30" viewBox="0 0 32 32" fill="none"><circle cx="16" cy="16" r="13" stroke="#2ee6c5" stroke-width="2"/><ellipse cx="16" cy="16" rx="6" ry="13" stroke="#2ee6c5" stroke-width="1.5" opacity=".6"/><path d="M3.5 12h25M3.5 20h25" stroke="#2ee6c5" stroke-width="1.5" opacity=".6"/><circle cx="22.5" cy="10" r="3.2" fill="#ff4d5e" stroke="#05080f" stroke-width="1.5"/></svg>
+    <div>GLOBAL ALERT<small>THE WORLD, LIVE & MAPPED</small></div>
+  </div>
+  <div class="grow"></div>
+  <span id="status" class="pill off"><span class="dot"></span><span id="statusTxt">…</span></span>
+</div>
+<div id="banner"></div>
+<div id="near"></div>
+<div id="pickhint">Touchez le globe pour choisir votre lieu</div>
+
+<div id="fabs">
+  <button class="fab" id="fNear" title="Près de vous"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s7-6.2 7-12a7 7 0 1 0-14 0c0 5.8 7 12 7 12Z"/><circle cx="12" cy="10" r="2.5"/></svg></button>
+  <button class="fab" id="fMode" title="Mode d'affichage"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15 15 0 0 1 0 20M12 2a15 15 0 0 0 0 20"/></svg></button>
+  <button class="fab" id="fFilter" title="Filtres"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg><span class="badge" id="fBadge" style="display:none"></span></button>
+  <button class="fab" id="fLayers" title="Couches"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="m12 2 10 5-10 5L2 7l10-5Z"/><path d="m2 12 10 5 10-5M2 17l10 5 10-5"/></svg></button>
+</div>
+
+<div id="ticker"><div class="lab">FLASH INFO <button id="tickPause" aria-label="Pause">❚❚</button></div><div id="tickwrap"><div id="tick"></div></div></div>
+
+<nav id="tabs">
+  <button data-tab="carte" class="on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2Z"/><path d="M9 4v14M15 6v14"/></svg>Carte</button>
+  <button data-tab="flux"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9h10M7 13h10M7 17h6"/></svg>Flux</button>
+  <button data-tab="tableau"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Tableau</button>
+  <button data-tab="sources"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 2 4 5v6c0 5 3.4 9.3 8 11 4.6-1.7 8-6 8-11V5l-8-3Z"/><path d="m9 12 2 2 4-4"/></svg>Sources</button>
+</nav>
+
+<section class="page" id="p-flux"><div class="wrap"><h1 class="h">Flux mondial</h1><div class="sub" id="fluxSub"></div><div id="fluxBody"></div></div></section>
+<section class="page" id="p-tableau"><div class="wrap"><h1 class="h">Tableau de bord</h1><div class="sub" id="dashSub"></div><div id="dash"></div></div></section>
+<section class="page" id="p-sources"><div class="wrap"><h1 class="h">Sources & connecteurs</h1><div class="sub">État réel de chaque connecteur. « LIVE » n'est affiché que si la dernière collecte a effectivement réussi et date de moins de 30 minutes.</div><div id="srcs"></div></div></section>
+<section class="page" id="p-report"><div class="wrap" id="report"></div></section>
+
+<div class="scrim" id="scrim"></div>
+<div class="sheet" id="sLayers"><div class="grab"></div><header><h2 class="h">Couches de la carte</h2><button class="done" data-close>Terminé</button></header><div class="body" id="layersBody"></div></div>
+<div class="sheet" id="sFilters"><div class="grab"></div><header><h2 class="h">Filtres</h2><button class="done" data-close>Fermer</button></header><div class="body" id="filtersBody"></div>
+  <footer><button class="btn sec" id="fReset">Réinitialiser</button><button class="btn pri" id="fApply">Afficher les résultats</button></footer></div>
+<div class="sheet" id="sEvent"><div class="grab"></div><div class="body" id="eventBody" style="padding-top:12px"></div>
+  <footer><button class="btn sec" data-close style="flex:0 0 auto;padding-left:18px;padding-right:18px">✕</button><button class="btn pri" id="evFull">Voir le rapport complet ›</button></footer></div>
+<div class="sheet" id="sNear"><div class="grab"></div><header><h2 class="h">Près de vous</h2><button class="done" data-close>Fermer</button></header><div class="body" id="nearBody"></div></div>
+<div class="sheet" id="sCountry"><div class="grab"></div><header><h2 class="h" id="cTitle"></h2><button class="done" data-close>Fermer</button></header><div class="body" id="cBody"></div></div>
+<div id="tip"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/topojson/3.0.2/topojson.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/globe.gl@2.46.2/dist/globe.gl.min.js"></script>
+<script>
+const WORLD = /*__WORLD__*/null;
+const FR_NAMES = /*__FR__*/{};
+</script>
+<script>
+"use strict";
+/* ============ Icônes ============ */
+const P = {
+  quake:'<path d="M2 12h4l3-8 4 16 3-8h6"/>',
+  fire:'<path d="M12 22c4 0 7-2.7 7-7 0-4-3-6-4-9-1 2-2 3-3 3 0-3-1-5-3-7 0 4-4 6-4 13 0 4.3 3 7 7 7Z"/>',
+  storm:'<path d="M3 8h11a3 3 0 1 0-3-3M3 12h16a3 3 0 1 1-3 3M3 16h8"/>',
+  flood:'<path d="M12 3s6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 6-11 6-11Z"/>',
+  volcano:'<path d="m2 21 7-11h6l7 11H2Z"/><path d="M10 6c0-2 1-3 2-3M14 6c0-2-1-3-2-3"/>',
+  drought:'<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
+  ice:'<path d="M12 2v20M4 6l16 12M20 6 4 18"/>',
+  shield:'<path d="M12 2 4 5v6c0 5 3.4 9.3 8 11 4.6-1.7 8-6 8-11V5l-8-3Z"/>',
+  cyber:'<rect x="5" y="5" width="14" height="14" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M9 2v3M15 2v3M9 19v3M15 19v3M2 9h3M2 15h3M19 9h3M19 15h3"/>',
+  mega:'<path d="M3 11v2l13 5V6L3 11Z"/><path d="M7 13v4a2 2 0 0 0 4 0v-2"/>',
+  eye:'<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/>',
+  target:'<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M1 12h4M19 12h4"/>',
+  bomb:'<circle cx="11" cy="14" r="7"/><path d="m16 9 3-3M18 3l1 1"/>',
+  userx:'<circle cx="9" cy="8" r="4"/><path d="M2 21c0-4 3-6 7-6s7 2 7 6M17 8l4 4M21 8l-4 4"/>',
+  siren:'<path d="M7 18v-6a5 5 0 0 1 10 0v6"/><path d="M5 21h14M12 3v2M4 8l1.5 1M20 8l-1.5 1"/>',
+  usersearch:'<circle cx="9" cy="8" r="4"/><path d="M2 21c0-4 3-6 7-6"/><circle cx="17" cy="17" r="3"/><path d="m22 22-2.5-2.5"/>',
+  anchor:'<circle cx="12" cy="5" r="2"/><path d="M12 7v15M5 13a7 7 0 0 0 14 0M8 11h8"/>',
+  pipe:'<path d="M3 21V7a3 3 0 0 1 3-3h5v10h4a3 3 0 0 1 3 3v4"/><path d="M14 4h7"/>',
+  cable:'<path d="M5 3v6a4 4 0 0 0 8 0V7a4 4 0 0 1 8 0v14"/>',
+  border:'<path d="M4 21V3M9 21V6M14 21V6M19 21V3M4 9h15M4 15h15"/>',
+  bank:'<path d="M3 10 12 4l9 6H3ZM5 10v8M10 10v8M14 10v8M19 10v8M3 21h18"/>',
+  base:'<path d="M12 2 4 5v6c0 5 3.4 9.3 8 11 4.6-1.7 8-6 8-11V5l-8-3Z"/><path d="M12 8v6M9 11h6"/>',
+  plane:'<path d="M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5 6.1 4.1L6 15H3l-1 1 4 2 2 4 1-1v-3l3.6-3.5 4.1 6.1.5-.3c.4-.2.6-.6.5-1.1Z"/>',
+  atom:'<circle cx="12" cy="12" r="1.5"/><ellipse cx="12" cy="12" rx="10" ry="4"/><ellipse cx="12" cy="12" rx="10" ry="4" transform="rotate(60 12 12)"/><ellipse cx="12" cy="12" rx="10" ry="4" transform="rotate(120 12 12)"/>',
+  waves:'<path d="M2 8c2-2 4-2 6 0s4 2 6 0 4-2 6 0M2 14c2-2 4-2 6 0s4 2 6 0 4-2 6 0M2 20c2-2 4-2 6 0s4 2 6 0 4-2 6 0"/>',
+  server:'<rect x="3" y="3" width="18" height="7" rx="2"/><rect x="3" y="14" width="18" height="7" rx="2"/><path d="M7 6.5h.01M7 17.5h.01"/>',
+  rocket:'<path d="M5 15c-1.5 1.3-2 5-2 5s3.7-.5 5-2c.7-.8.7-2.1-.1-2.9-.8-.8-2.1-.8-2.9-.1Z"/><path d="m12 15-3-3a22 22 0 0 1 2-4A13 13 0 0 1 22 2c0 2.7-.8 7.5-6 11a22 22 0 0 1-4 2Z"/>',
+  ship:'<path d="M2 20c2 1 4 1 6 0s4-1 6 0 4 1 6 0M4 17l-1-5h18l-2 5M12 3v9M8 7h8"/>',
+  shark:'<path d="M2 16c4-1 7-6 9-12 1 4 3 7 6 9l5 3H2Z"/>',
+  croc:'<path d="M2 14h14l6-3-6-1-3-3-3 3H6l-4 4Z"/><path d="M5 14v3M10 14v3M14 14v3"/>',
+  skull:'<circle cx="12" cy="10" r="7"/><path d="M9 21v-4h6v4M9 10h.01M15 10h.01"/>',
+  meteor:'<circle cx="16" cy="16" r="5"/><path d="M2 2l9 9M6 2l7 7M2 6l7 7"/>',
+  scope:'<path d="m10 14-6 6M14 10l6-6-4-2-8 8 4 4 8-8-2-4"/><path d="M8 22h8"/>',
+  health:'<path d="M12 21s-8-4.5-8-11a5 5 0 0 1 8-4 5 5 0 0 1 8 4c0 6.5-8 11-8 11Z"/><path d="M12 9v5M9.5 11.5h5"/>'
+};
+const svg = (k, sw=2) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round">${P[k]||P.target}</svg>`;
+
+/* ============ Catégories ============
+   kind 'ev' = événementiel (temps, gravité) · 'ref' = objet permanent (référentiel)
+   src = connecteur(s) actif(s) · ref = fichier data/ref/<clé>.json · cand = source candidate */
+const FAMS = [
+ ['nat','Environnement & catastrophes',[
+  ['quake','Tremblements de terre','quake','#facc15','ev',['usgs','gdacs']],
+  ['fire','Feux de forêt','fire','#ef4444','ev',['eonet','gdacs']],
+  ['storm','Tempêtes sévères','storm','#818cf8','ev',['eonet','gdacs']],
+  ['flood','Inondations','flood','#38bdf8','ev',['eonet','gdacs']],
+  ['volcano','Volcans','volcano','#fb923c','ev',['eonet','gdacs']],
+  ['drought','Sécheresses','drought','#fbbf24','ev',['eonet','gdacs']],
+  ['ice','Glace marine & lacustre','ice','#7dd3fc','ev',['eonet']]]],
+ ['secu','Sécurité & géopolitique',[
+  ['cyber','Cybermenaces (KEV)','cyber','#a855f7','ev',['kev'],null,true],
+  ['conflict','Zones de conflit','shield','#ec4899','ev',null,'UCDP (jeton gratuit) / ACLED (compte)'],
+  ['protest','Manifestations','mega','#fb923c','ev',null,'ACLED (compte gratuit, non commercial)'],
+  ['intel','Points chauds de renseignement','eye','#f97316','ev',null,'Sources publiques à qualifier'],
+  ['shooting','Fusillades','target','#ef4444','ev',null,'Gun Violence Archive (US)'],
+  ['attack','Attaques & agressions','bomb','#f43f5e','ev',null,'GDELT + vérification multi-sources'],
+  ['kidnap','Enlèvements','userx','#8b5cf6','ev',null,'GDELT + vérification multi-sources'],
+  ['theft','Vols & cambriolages','siren','#f59e0b','ev',null,'Open data police locales'],
+  ['missing','Disparus & alertes AMBER','usersearch','#d946ef','ev',null,'Flux AMBER officiels']]],
+ ['sante','Santé publique',[
+  ['health','Alertes sanitaires (OMS)','health','#f472b6','ev',['who']]]],
+ ['infra','Infrastructures & stratégie',[
+  ['choke','Points d\'étranglement','anchor','#eab308','ref'],
+  ['cable','Câbles sous-marins','cable','#06b6d4','ref'],
+  ['border','Points de passage frontaliers','border','#f97316','ref'],
+  ['bourse','Bourses','bank','#eab308','ref'],
+  ['milbase','Bases militaires','base','#3b82f6','ref'],
+  ['milair','Aérodromes militaires','plane','#3b82f6','ref'],
+  ['nuclear','Sites nucléaires','atom','#22c55e','ref'],
+  ['dam','Grands barrages (hydro ≥ 1 GW)','waves','#06b6d4','ref'],
+  ['dc','Centres de données','server','#60a5fa','ref'],
+  ['spaceport','Spatioports','rocket','#22c55e','ref'],
+  ['port','Ports stratégiques','ship','#0ea5e9','ref'],
+  ['airport','Aéroports','plane','#38bdf8','ref'],
+  ['pipeline','Pipelines','pipe','#f97316','ref',null,'Global Energy Monitor (CC BY 4.0, téléchargement manuel)']]],
+ ['faune','Faune & milieu maritime',[
+  ['piracy','Actes de piraterie','skull','#ef4444','ev',['asam']],
+  ['shark','Incidents de requins','shark','#64748b','ev',null,'Global Shark Attack File (licence à vérifier)'],
+  ['croc','Observations de crocodiles','croc','#16a34a','ev',null,'Autorités locales (QLD, NT…)'],
+  ['piracyzone','Zones à risque de piraterie','skull','#b91c1c','ref',null,'Avis maritimes officiels (JWC)']]],
+ ['space','Espace & ciel',[
+  ['launch','Lancements de fusées','rocket','#22d3ee','ev',['ll2']],
+  ['fireball','Bolides & météores','meteor','#fb923c','ev',['cneos']],
+  ['observ','Observatoires','scope','#a78bfa','ref']]]
+];
+const CAT = {};
+FAMS.forEach(([fk,fn,list])=>list.forEach(([k,n,ic,c,kind,src,cand,nongeo])=>CAT[k]={k,n,ic,c,kind,src:src||null,cand:cand||null,nongeo:!!nongeo,fam:fk,famName:fn}));
+const SEV = [{n:'Indéterminée',c:'#8a98b3'},{n:'Information',c:'#3b82f6'},{n:'Faible',c:'#22c55e'},{n:'Modérée',c:'#eab308'},{n:'Élevée',c:'#f97316'},{n:'Critique',c:'#ef4444'}];
+const PREC = {exact:'Point exact (coordonnées de la source)', approx:'Point approximatif (dernière position connue)', zone:'Centre de zone (polygone simplifié)', pays:'Niveau pays (centroïde) — pas de position précise', none:'Non géolocalisé'};
+const PERIODS = [[1/24,'1 h'],[0.25,'6 h'],[1,'24 h'],[2,'48 h'],[7,'7 j'],[30,'30 j'],[180,'6 mois']];
+
+/* Régions : découpage APPROXIMATIF par boîtes [latMin,latMax,lngMin,lngMax] */
+const REGIONS = {
+  'Amérique du Nord':[[7,84,-170,-50]], 'Amérique du Sud':[[-56,13,-82,-34]], 'Europe de l\'Ouest':[[35,72,-25,16]], 'Europe de l\'Est':[[40,72,16,45]],
+  'Baltique':[[53,60,20,29]], 'Afrique du Nord':[[15,38,-18,37]], 'Afrique subsaharienne':[[-35,15,-18,52]], 'Moyen-Orient':[[12,42,34,63]],
+  'Asie centrale':[[35,56,46,88]], 'Asie du Sud':[[5,37,60,98]], 'Asie de l\'Est':[[18,54,98,150]], 'Asie du Sud-Est':[[-11,23,92,141]],
+  'Océanie':[[-50,0,110,180],[-30,20,-180,-130]], 'Régions polaires':[[66,90,-180,180],[-90,-60,-180,180]]
+};
+const inRegion = (e,r) => REGIONS[r].some(([a,b,c,d])=>e.lat>=a&&e.lat<=b&&e.lng>=c&&e.lng<=d);
+
+/* ============ État ============ */
+const DEFAULT_LAYERS = ['quake','fire','storm','flood','volcano','drought','ice','health','piracy','launch'];
+const S = {
+  events:[], nongeo:[], ref:{}, refIndex:{}, status:{}, generated:null, source:'?', mode:'multi',
+  layers:new Set(DEFAULT_LAYERS), filters:{period:7,minSev:0,regions:new Set(),country:'',q:'',reviewedOnly:false},
+  me:null, radius:100, picking:false, globeMode:0, sel:null
+};
+try{ const sv=JSON.parse(localStorage.getItem('ga_layers2')||'null'); if(Array.isArray(sv)) S.layers=new Set(sv.filter(k=>CAT[k])); }catch(e){}
+try{ const q=new URLSearchParams(location.search); if(q.get('layers')) S.layers=new Set(q.get('layers').split(',').filter(k=>CAT[k])); if(q.get('t')) S.filters.period=+q.get('t')||7; }catch(e){}
+
+/* ============ Utilitaires ============ */
+const $ = s => document.querySelector(s);
+const esc = s => String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const T = x => typeof x==='number'?x:Date.parse(x);
+const fmtDate = t => new Date(T(t)).toLocaleString('fr-FR',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'});
+const ago = t => { const d=Date.now()-T(t), m=Math.round(Math.abs(d)/60000), fut=d<0; let s; if(m<1) return 'à l\'instant'; if(m<60) s=`${m} min`; else if(m<2880) s=`${Math.round(m/60)} h`; else s=`${Math.round(m/1440)} j`; return fut?`dans ${s}`:`il y a ${s}`; };
+const hav = (a,b) => { const r=Math.PI/180,dLa=(b.lat-a.lat)*r,dLo=(b.lng-a.lng)*r; const x=Math.sin(dLa/2)**2+Math.cos(a.lat*r)*Math.cos(b.lat*r)*Math.sin(dLo/2)**2; return 12742*Math.asin(Math.sqrt(x)); };
+const safeId = id => String(id).replace(/[^A-Za-z0-9-]/g,'-');
+const isApprox = e => !['exact'].includes(e.precision);
+const extLink = (u,l) => `<a href="${esc(u)}" target="_blank" rel="noopener">${esc(l||u)}</a>`;
+
+/* ============ Pays (local) ============ */
+let COUNTRIES=[];
+function initCountries(){
+  if(!WORLD||!window.topojson) return;
+  COUNTRIES = topojson.feature(WORLD, WORLD.objects.countries).features;
+  COUNTRIES.forEach(f=>{ f.bbox2=d3.geoBounds(f); f.properties.name=FR_NAMES[f.properties.name]||f.properties.name; });
+}
+function countryOf(lat,lng){ for(const f of COUNTRIES){ const [[x0,y0],[x1,y1]]=f.bbox2; if(lat<y0||lat>y1) continue; if(x0<=x1&&(lng<x0||lng>x1)) continue; if(d3.geoContains(f,[lng,lat])) return f.properties.name; } return null; }
+
+/* ============ Chargement des données ============ */
+async function getJSON(url,ms=20000){ const c=new AbortController(), t=setTimeout(()=>c.abort(),ms); try{ const r=await fetch(url,{signal:c.signal,cache:'no-cache'}); if(!r.ok) throw new Error('HTTP '+r.status); return await r.json(); } finally{ clearTimeout(t); } }
+
+async function loadCollected(){
+  const [ev,st,ri]=await Promise.all([getJSON('data/events.json'),getJSON('data/status.json').catch(()=>({})),getJSON('data/ref/index.json').catch(()=>({}))]);
+  S.source='collector'; S.generated=T(ev.generated); S.status=st; S.refIndex=ri;
+  return {events:ev.events||[], nongeo:ev.nongeo||[]};
+}
+/* Repli navigateur (si la page est ouverte sans les données collectées) : USGS + EONET en direct */
+async function loadDirect(){
+  const st={};
+  const q=async(id,name,url,fn)=>{ const s={id,name,lastCheck:new Date().toISOString(),state:'err',n:0}; try{ const r=fn(await getJSON(url)); s.state='ok'; s.n=r.length; st[id]=s; return r; }catch(e){ s.err=e.name==='TypeError'?'Requête bloquée (CSP/réseau)':String(e.message||e); st[id]=s; return []; } };
+  const sq=m=>m==null?[0,'Magnitude inconnue']:[m<3?1:m<4.5?2:m<6?3:m<7?4:5,`Magnitude ${m.toFixed(1)} → <3 info · 3–4,5 faible · 4,5–6 modérée · 6–7 élevée · ≥7 critique`];
+  const u=await q('usgs','USGS (direct)','https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/2.5_week.geojson',j=>j.features.map(f=>{ const p=f.properties,[lng,lat,depth]=f.geometry.coordinates,[sev,why]=sq(p.mag); return {id:'usgs-'+f.id,cat:'quake',title:`Séisme de magnitude ${p.mag?.toFixed(1)}`,titleOrig:p.title,place:p.place,lat,lng,depth,mag:p.mag,time:p.time,updated:p.updated,sev,sevWhy:why,verifLabel:p.status==='reviewed'?'Officiel — revu par un sismologue':'Officiel — automatique',verif:p.status==='reviewed'?'officiel-revu':'officiel-auto',precision:'exact',tsunami:p.tsunami===1,sources:[{n:'USGS',u:p.url}],nsrc:1,via:['usgs']}; }));
+  const M={wildfires:'fire',severeStorms:'storm',floods:'flood',volcanoes:'volcano',drought:'drought',seaLakeIce:'ice'};
+  const e=await q('eonet','NASA EONET (direct)','https://eonet.gsfc.nasa.gov/api/v3/events?status=open&days=60',j=>j.events.filter(x=>M[x.categories?.[0]?.id]&&x.geometry?.length&&x.geometry.at(-1).type==='Point').map(x=>{ const g=x.geometry.at(-1); return {id:'eonet-'+x.id,cat:M[x.categories[0].id],title:x.title,titleOrig:x.title,place:x.title,lng:g.coordinates[0],lat:g.coordinates[1],time:x.geometry[0].date,updated:g.date,sev:0,sevWhy:'Non évaluée en mode direct.',verifLabel:'Source officielle',verif:'officiel',precision:'approx',sources:[{n:'NASA EONET',u:x.link}],nsrc:1,via:['eonet']}; }));
+  S.status=st; S.source='direct'; S.generated=Date.now();
+  const all=[...u,...e]; all.forEach(x=>x.country=countryOf(x.lat,x.lng));
+  if(!all.length) throw new Error('aucune donnée');
+  return {events:all,nongeo:[]};
+}
+
+async function refresh(){
+  let d;
+  try{ d=await loadCollected(); }
+  catch(e1){ try{ d=await loadDirect(); }catch(e2){ S.source='none'; d={events:[],nongeo:[]}; } }
+  for(const x of [...d.events,...d.nongeo]){ x.sid=safeId(x.id); x.t=T(x.time); }
+  d.events.sort((a,b)=>b.t-a.t); d.nongeo.sort((a,b)=>b.t-a.t);
+  S.events=d.events; S.nongeo=d.nongeo; S.lastRefresh=Date.now();
+  await ensureRefLayers();
+  renderStatus(); renderAll();
+}
+
+async function loadRef(k){
+  if(S.ref[k]!==undefined) return S.ref[k];
+  S.ref[k]=null;
+  try{
+    const j=await getJSON(`data/ref/${k}.json`,30000);
+    S.ref[k]={meta:j, items:(j.items||[]).map((it,i)=>({id:`ref-${k}-${i}`,sid:`ref-${k}-${i}`,cat:k,ref:true,title:it.n||CAT[k].n,place:it.d||'',country:it.c||null,lat:it.lat,lng:it.lng,url:it.u||null})), lines:j.lines||null};
+  }catch(e){ S.ref[k]={meta:null,items:[],err:String(e.message||e)}; }
+  return S.ref[k];
+}
+async function ensureRefLayers(){ await Promise.all([...S.layers].filter(k=>CAT[k].kind==='ref'&&S.refIndex[k]).map(loadRef)); }
+
+/* ============ Filtrage ============ */
+function visible(){
+  const f=S.filters, since=Date.now()-f.period*864e5, out=[];
+  const geo = e => (!f.regions.size||[...f.regions].some(r=>inRegion(e,r))) && (!f.country||e.country===f.country)
+    && (!f.q||(e.title+' '+(e.place||'')+' '+(e.country||'')+' '+(e.titleOrig||'')).toLowerCase().includes(f.q.toLowerCase()));
+  for(const e of S.events){ if(!S.layers.has(e.cat)) continue; if(e.cat==='launch'&&e.upcoming){ if(e.t>Date.now()+30*864e5) continue; } else if(e.t<since) continue;
+    if(e.sev<f.minSev) continue; if(f.reviewedOnly&&!(e.verif==='officiel-revu'||e.verif==='officiel'||e.nsrc>1)) continue; if(geo(e)) out.push(e); }
+  for(const k of S.layers){ if(CAT[k].kind!=='ref'||!S.ref[k]) continue; for(const it of S.ref[k].items) if(geo(it)) out.push(it); }
+  return out;
+}
+function visibleNongeo(){ const since=Date.now()-S.filters.period*864e5; return S.nongeo.filter(e=>S.layers.has(e.cat)&&e.t>=since&&e.sev>=S.filters.minSev); }
+function activeFilterCount(){ const f=S.filters; return (f.period!==7)+(f.minSev>0)+f.regions.size+(!!f.country)+(!!f.q)+(f.reviewedOnly?1:0); }
+
+/* ============ Globe ============ */
+let G, clusterCell=-1, VIS=[];
+const MODES=[
+  {n:'Globe sombre',globe:'#0a1424',cap:()=>'rgba(30,48,78,.88)',stroke:'#2c4570',atm:'#2ee6c5'},
+  {n:'Politique',globe:'#08243b',cap:f=>`hsla(${(f.id*47)%360},38%,32%,.92)`,stroke:'#0b1a2c',atm:'#60a5fa'},
+  {n:'Nocturne',globe:'#020409',cap:()=>'rgba(14,20,34,.95)',stroke:'#1f2b45',atm:'#6366f1'},
+  {n:'Simplifié (performances)',globe:'#0d1a2e',cap:()=>'rgba(0,0,0,0)',stroke:'#35507d',atm:'#2ee6c5'}
+];
+function initGlobe(){
+  const el=$('#globe');
+  try{ G=new Globe(el,{animateIn:true}); }catch(e){ G=Globe()(el); }
+  G.backgroundColor('#05080f').showGraticules(true).atmosphereAltitude(0.18).width(innerWidth).height(innerHeight)
+   .polygonsData(COUNTRIES).polygonAltitude(0.006).polygonsTransitionDuration(0).polygonSideColor(()=>'rgba(20,32,55,.6)')
+   .polygonLabel(f=>{ const n=VIS.filter(e=>!e.ref&&e.country===f.properties.name).length; return `<div style="font:12px Inter;background:rgba(12,19,34,.95);padding:6px 9px;border:1px solid #1d2940;border-radius:8px"><b>${esc(f.properties.name)}</b><br>${n} événement(s) affiché(s)</div>`; })
+   .onPolygonHover(h=>{ G.polygonAltitude(f=>f===h?0.014:0.006); el.style.cursor=h?'pointer':''; })
+   .onPolygonClick((f,ev,c)=>{ if(S.picking&&c) return setMe(c.lat,c.lng); openCountry(f); })
+   .onGlobeClick(c=>{ if(S.picking) setMe(c.lat,c.lng); })
+   .htmlElementsData([]).htmlLat(d=>d.lat).htmlLng(d=>d.lng).htmlAltitude(0.012).htmlElement(markerEl).htmlTransitionDuration(0)
+   .pathsData([]).pathPoints('p').pathPointLat(p=>p[0]).pathPointLng(p=>p[1]).pathColor(d=>d.col).pathStroke(0.6).pathTransitionDuration(0)
+   .pathLabel(d=>`<div style="font:12px Inter;background:rgba(12,19,34,.95);padding:6px 9px;border:1px solid #1d2940;border-radius:8px">Câble : <b>${esc(d.n)}</b></div>`);
+  if(G.htmlElementVisibilityModifier) G.htmlElementVisibilityModifier((el,v)=>{ el.style.opacity=v?1:0; el.style.pointerEvents=v?'auto':'none'; });
+  applyMode();
+  const ctr=G.controls(); ctr.autoRotate=true; ctr.autoRotateSpeed=0.35;
+  el.addEventListener('pointerdown',()=>{ctr.autoRotate=false},{once:true});
+  G.pointOfView({lat:30,lng:10,altitude:2.4});
+  const onZ=()=>{ const c=cellFor(G.pointOfView().altitude); if(c!==clusterCell){ clusterCell=c; drawMarkers(); } };
+  if(G.onZoom) G.onZoom(onZ); else ctr.addEventListener('change',onZ);
+  addEventListener('resize',()=>G.width(innerWidth).height(innerHeight));
+}
+function applyMode(){ const m=MODES[S.globeMode]; G.globeMaterial().color.set(m.globe); G.polygonCapColor(m.cap).polygonStrokeColor(()=>m.stroke).atmosphereColor(m.atm); }
+function cellFor(alt){ const steps=[0.25,0.5,1,2,4,8]; const raw=alt*4; return steps.reduce((p,s)=>Math.abs(s-raw)<Math.abs(p-raw)?s:p, steps[0]); }
+function cluster(list){
+  const cell=clusterCell>0?clusterCell:cellFor(2.4), map=new Map();
+  for(const e of list){ const cs=e.ref?cell*2.5:cell; const key=e.cat+':'+Math.floor(e.lat/cs)+':'+Math.floor(e.lng/cs); let c=map.get(key); if(!c){c={cat:e.cat,ref:!!e.ref,items:[]};map.set(key,c);} c.items.push(e); }
+  const out=[]; for(const c of map.values()){ if(c.items.length===1){ out.push({one:c.items[0],lat:c.items[0].lat,lng:c.items[0].lng}); continue; }
+    c.lat=d3.mean(c.items,e=>e.lat); c.lng=d3.mean(c.items,e=>e.lng); c.maxSev=c.ref?0:d3.max(c.items,e=>e.sev); out.push(c); }
+  if(S.me) out.push({me:true,lat:S.me.lat,lng:S.me.lng});
+  return out;
+}
+function markerEl(d){
+  const el=document.createElement('div'); el.className='mk';
+  if(d.me){ el.innerHTML='<div class="mk-me"></div>'; el.title='Votre lieu'; return el; }
+  if(d.one){ const e=d.one,c=CAT[e.cat];
+    el.innerHTML = e.ref ? `<div class="mk-ref" style="background:${c.c}">${svg(c.ic,2.6)}</div>`
+      : `<div class="mk-one${e.sev>=5?' urg':''}" style="background:${c.c};--ring:${SEV[e.sev].c};${e.verif==='annonce'?'opacity:.75;border-style:dashed':''}">${svg(c.ic,2.4)}</div>`;
+    el.onclick=ev=>{ev.stopPropagation(); openEvent(e);};
+    el.onmouseenter=ev=>tip(ev,`<b>${esc(e.title)}</b><br>${esc(e.place||'')}${e.ref?'':`<br><span style="color:#8a98b3">${ago(e.t)}</span>`}`); el.onmouseleave=()=>tip();
+  } else { const c=CAT[d.cat], n=d.items.length;
+    el.innerHTML=`<div class="mk-cl${d.ref?' ref':''}" style="background:${c.c};font-size:${n>99?11:13}px;${d.ref?'min-width:26px;height:26px':`box-shadow:0 0 0 3px ${SEV[d.maxSev].c}66,0 2px 10px rgba(0,0,0,.55)`}">${n}</div>`;
+    el.title=`${n} × ${c.n}`;
+    el.onclick=ev=>{ev.stopPropagation(); const a=G.pointOfView().altitude; G.pointOfView({lat:d.lat,lng:d.lng,altitude:Math.max(0.06,a/2.6)},800);};
+  }
+  return el;
+}
+function tip(ev,html){ const t=$('#tip'); if(!ev){t.style.display='none';return;} t.innerHTML=html; t.style.display='block'; t.style.left=Math.min(ev.clientX+12,innerWidth-250)+'px'; t.style.top=(ev.clientY+12)+'px'; }
+function drawMarkers(){ if(!G) return; G.htmlElementsData(cluster(VIS)); G.pathsData(S.layers.has('cable')&&S.ref.cable?.lines?S.ref.cable.lines:[]); }
+
+/* ============ Rendu ============ */
+function renderAll(){
+  VIS=visible(); drawMarkers(); renderTicker(); renderNear(); renderLayers(); updateBadge(); saveUrl();
+  const on=id=>$('#p-'+id).classList.contains('on');
+  if(on('flux')) renderFeed(); if(on('tableau')) renderDash(); if(on('sources')) renderSources();
+}
+function saveUrl(){ try{ const q=new URLSearchParams(); q.set('layers',[...S.layers].join(',')); if(S.filters.period!==7) q.set('t',S.filters.period); history.replaceState(null,'',location.pathname+'?'+q+location.hash); }catch(e){} try{localStorage.setItem('ga_layers2',JSON.stringify([...S.layers]));}catch(e){} }
+function renderStatus(){
+  const st=$('#status'), tx=$('#statusTxt'), b=$('#banner'), ok=Object.values(S.status).filter(c=>c.state==='ok');
+  const age=Date.now()-S.generated;
+  b.style.display='none';
+  if(S.source==='none'){ st.className='pill off'; tx.textContent='HORS LIGNE';
+    b.innerHTML=`<button aria-label="Fermer" onclick="this.parentNode.style.display='none'">✕</button><b>Aucune donnée disponible.</b> Ni les données collectées ni les flux publics n'ont pu être chargés (aperçu sandboxé ou réseau). Ouvrez la version hébergée du site.`; b.style.display='block'; }
+  else if(ok.length && age<30*60e3){ st.className='pill live'; tx.textContent='LIVE · '+new Date(S.generated).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}); }
+  else { st.className='pill demo'; tx.textContent='DONNÉES · '+ago(S.generated);
+    b.innerHTML=`<button aria-label="Fermer" onclick="this.parentNode.style.display='none'">✕</button><b>Données non actualisées.</b> Dernière collecte réussie ${ago(S.generated)}. Les connecteurs sont peut-être en panne : voir l'onglet Sources.`; b.style.display='block'; }
+}
+function updateBadge(){ const n=activeFilterCount(), b=$('#fBadge'); b.style.display=n?'grid':'none'; b.textContent=n; }
+function renderTicker(){
+  const items=VIS.filter(e=>!e.ref&&e.sev>=3&&!(e.cat==='launch'&&e.upcoming)).slice(0,20), t=$('#tick');
+  t.innerHTML = items.length ? items.map(e=>`<span data-id="${e.sid}"><i style="background:${SEV[e.sev].c}"></i>${new Date(e.t).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})} · ${esc(e.title)} · ${esc(e.country||e.place||'')}</span>`).join('')
+    : '<span style="color:var(--mute)">Aucun événement de gravité modérée ou plus avec les filtres actuels</span>';
+  t.style.animationDuration=Math.max(30,items.length*7)+'s';
+  t.querySelectorAll('[data-id]').forEach(s=>s.onclick=()=>openEvent(byId(s.dataset.id)));
+}
+const byId = sid => S.events.find(e=>e.sid===sid) || S.nongeo.find(e=>e.sid===sid) || Object.values(S.ref).flatMap(r=>r?.items||[]).find(e=>e.sid===sid);
+
+/* ============ Couches ============ */
+function layerMeta(c){
+  if(c.kind==='ref'){
+    const ix=S.refIndex[c.k];
+    if(!ix||!ix.n) return {live:false,txt:`<span class="st-na">● À connecter</span>${c.cand?' · '+esc(c.cand):''}`};
+    const stale=ix.state!=='ok';
+    return {live:true,txt:`<span class="${stale?'stale':'st-live'}">● Référentiel</span> · ${ix.n.toLocaleString('fr-FR')} sites · ${esc(ix.source)}${stale?' · dernière mise à jour en échec':''}`};
+  }
+  if(!c.src) return {live:false,txt:`<span class="st-na">● À connecter</span>${c.cand?' · '+esc(c.cand):''}`};
+  const sts=c.src.map(s=>S.status[s]).filter(Boolean); if(!sts.length) return {live:false,txt:`<span class="st-na">● Indisponible ici</span>`};
+  const okS=sts.filter(s=>s.state==='ok'), n=(c.nongeo?S.nongeo:S.events).filter(e=>e.cat===c.k).length;
+  const lbl=okS.length?(Date.now()-S.generated<30*60e3?'<span class="st-live">● LIVE</span>':'<span class="stale">● Données anciennes</span>'):'<span class="st-err">● Erreur</span>';
+  return {live:true,txt:`${lbl} · ${n} élément(s)${c.nongeo?' <span class="ng-badge">non géolocalisé</span>':''} · ${sts.map(s=>esc(s.id?.toUpperCase?.()||'')).join(' + ')}`};
+}
+function renderLayers(){
+  const nLive=Object.values(CAT).filter(c=>layerMeta(c).live).length, nAll=Object.keys(CAT).length;
+  let h=`<div class="seg"><button data-m="solo" class="${S.mode==='solo'?'on':''}">Solo</button><button data-m="multi" class="${S.mode==='multi'?'on':''}">Multi</button></div>
+  <div class="legend">${SEV.map((s,i)=>`<span><i style="background:${s.c}"></i>${i?i+' · ':''}${s.n}</span>`).join('')}<span><i style="background:#fff;border-radius:2px"></i>carré = objet permanent</span></div>`;
+  for(const [fk,fn,list] of FAMS){
+    h+=`<div class="fam">${fn}</div><div class="group">`;
+    for(const [k] of list){ const c=CAT[k], m=layerMeta(c), on=S.layers.has(k);
+      h+=`<div class="row${m.live?'':' na'}"><div class="ico" style="background:${c.c}22;color:${c.c}">${svg(c.ic)}</div><div class="t"><b>${esc(c.n)}</b><small>${m.txt}</small></div>
+        <button class="sw${on?' on':''}" style="--c:${c.c}" data-k="${k}" ${m.live?'':'disabled'} aria-label="${esc(c.n)}"></button></div>`; }
+    h+='</div>';
+  }
+  h+=`<p class="note">${nLive} couches sur ${nAll} sont alimentées par des sources publiques vérifiables. Les autres restent désactivées tant qu'aucune source fiable et gratuite n'est branchée, plutôt que d'afficher des données douteuses.</p>`;
+  $('#layersBody').innerHTML=h;
+  $('#layersBody').querySelectorAll('[data-m]').forEach(b=>b.onclick=()=>{ S.mode=b.dataset.m; if(S.mode==='solo'&&S.layers.size>1) S.layers=new Set([[...S.layers][0]]); renderAll(); });
+  $('#layersBody').querySelectorAll('.sw[data-k]').forEach(b=>b.onclick=async()=>{ const k=b.dataset.k;
+    if(S.mode==='solo') S.layers=new Set([k]); else S.layers.has(k)?S.layers.delete(k):S.layers.add(k);
+    if(CAT[k].kind==='ref'&&S.layers.has(k)){ b.classList.add('on'); await loadRef(k); }
+    renderAll(); });
+}
+
+/* ============ Filtres ============ */
+let draft=null;
+function openFilters(){
+  const f=S.filters; draft={...f,regions:new Set(f.regions)};
+  const countries=[...new Set(S.events.map(e=>e.country).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'fr'));
+  $('#filtersBody').innerHTML=`
+   <div class="fam" style="margin-top:4px">Recherche</div><input class="search" id="fq" placeholder="Lieu, pays, mot-clé…" value="${esc(f.q)}">
+   <div class="fam">Pays</div><select class="sel" id="fc" style="width:100%"><option value="">Tous les pays (${countries.length} avec événements)</option>${countries.map(c=>`<option ${c===f.country?'selected':''}>${esc(c)}</option>`).join('')}</select>
+   <div class="fam">Période</div><div class="chips" id="fp">${PERIODS.map(([v,l])=>`<button class="chip${f.period===v?' on':''}" data-v="${v}">${l}</button>`).join('')}</div>
+   <div class="fam">Gravité minimale</div><div class="chips" id="fs">${SEV.map((s,i)=>`<button class="chip${f.minSev===i?' on':''}" data-v="${i}"><span style="color:${s.c}">●</span> ${i?i+' · '+s.n:'Toutes'}</button>`).join('')}</div>
+   <div class="fam">Vérification</div><div class="chips"><button class="chip${f.reviewedOnly?' on':''}" id="fr">Seulement : revus, confirmés ou multi-sources</button></div>
+   <div class="fam">Région</div><div class="chips" id="fg">${Object.keys(REGIONS).map(r=>`<button class="chip${f.regions.has(r)?' on':''}" data-v="${esc(r)}">${esc(r.toUpperCase())}</button>`).join('')}</div>
+   <p class="note">Régions : découpage approximatif par boîtes géographiques. Pays : déduits des coordonnées par le collecteur. Les objets permanents ignorent la période et la gravité.</p>`;
+  const one=(id,key)=>$('#'+id).querySelectorAll('.chip').forEach(b=>b.onclick=()=>{ draft[key]=+b.dataset.v; $('#'+id).querySelectorAll('.chip').forEach(x=>x.classList.toggle('on',x===b)); });
+  one('fp','period'); one('fs','minSev');
+  $('#fr').onclick=e=>{ draft.reviewedOnly=!draft.reviewedOnly; e.currentTarget.classList.toggle('on'); };
+  $('#fg').querySelectorAll('.chip').forEach(b=>b.onclick=()=>{ const v=b.dataset.v; draft.regions.has(v)?draft.regions.delete(v):draft.regions.add(v); b.classList.toggle('on'); });
+  openSheet('sFilters');
+}
+$('#fApply').onclick=()=>{ draft.q=$('#fq').value.trim(); draft.country=$('#fc').value; S.filters=draft; closeSheets(); renderAll(); flyToFiltered(); };
+$('#fReset').onclick=()=>{ S.filters={period:7,minSev:0,regions:new Set(),country:'',q:'',reviewedOnly:false}; closeSheets(); renderAll(); };
+function flyToFiltered(){ const v=VIS.filter(e=>!e.ref); if(!v.length||(!S.filters.country&&!S.filters.regions.size&&!S.filters.q)) return; G.pointOfView({lat:d3.mean(v,e=>e.lat),lng:d3.mean(v,e=>e.lng),altitude:v.length>1?1.4:0.6},900); }
+
+/* ============ Fiche rapide ============ */
+function catSpecific(e){
+  const r=[];
+  if(e.cat==='quake'){ if(e.depth!=null) r.push(['Profondeur',`${(+e.depth).toFixed(0)} km`]); if(e.tsunami) r.push(['Tsunami','Indicateur tsunami signalé par la source — consulter les centres d\'alerte officiels']); if(e.felt) r.push(['Ressenti',`${e.felt} témoignage(s)`]); if(e.pager) r.push(['Alerte PAGER',e.pager]); }
+  if(e.gdacsLevel) r.push(['Alerte GDACS',e.gdacsLevel]);
+  if(e.mag!=null&&e.cat!=='quake') r.push(['Mesure',`${e.mag} ${e.magUnit||''}`]);
+  if(e.cat==='launch'){ r.push(['Statut',e.launchStatus||'—']); if(e.provider) r.push(['Opérateur',e.provider]); if(e.rocket) r.push(['Lanceur',e.rocket]); if(e.mission) r.push(['Mission',e.mission]); }
+  if(e.cat==='fireball'){ if(e.energyKt!=null) r.push(['Énergie d\'impact',`${e.energyKt} kt`]); if(e.altKm) r.push(['Altitude',`${e.altKm} km`]); if(e.velKms) r.push(['Vitesse',`${e.velKms} km/s`]); }
+  if(e.cat==='piracy'){ if(e.hostility) r.push(['Auteurs',e.hostility]); if(e.victim) r.push(['Victime',e.victim]); }
+  if(e.cat==='cyber'){ r.push(['Éditeur / produit',`${e.vendor} · ${e.product}`]); if(e.ransomware) r.push(['Rançongiciel','Utilisation connue']); if(e.dueDate) r.push(['Échéance CISA',e.dueDate]); }
+  return r;
+}
+function openEvent(e){
+  if(!e) return; S.sel=e; const c=CAT[e.cat];
+  if(e.ref){
+    const m=S.ref[e.cat]?.meta||{};
+    $('#eventBody').innerHTML=`<div class="ev-tags"><span class="tag" style="background:${c.c};color:#0b0f19">${esc(c.n)}</span><span class="tag" style="background:var(--panel2);border:1px solid var(--line)">Objet permanent</span></div>
+     <div class="ev-title"><div class="ico" style="background:${c.c};color:#fff">${svg(c.ic)}</div><div><h3>${esc(e.title)}</h3><div style="color:var(--mute);font-size:13px;margin-top:3px">${esc(e.place)}</div></div></div>
+     <dl class="kv"><dt>Pays</dt><dd>${esc(e.country||'—')}</dd><dt>Coordonnées</dt><dd>${e.lat.toFixed(3)}, ${e.lng.toFixed(3)}</dd><dt>Précision</dt><dd>${esc(m.precision||'—')}</dd>
+     <dt>Source</dt><dd>${m.sourceUrl?extLink(m.sourceUrl,m.source):esc(m.source||'—')}</dd><dt>Licence</dt><dd>${esc(m.licence||'—')}</dd><dt>Mise à jour</dt><dd>${m.generated?fmtDate(m.generated):'—'}</dd>
+     ${e.url?`<dt>Fiche</dt><dd>${extLink(e.url,'Voir la fiche source')}</dd>`:''}</dl>${m.note?`<p class="note">${esc(m.note)}</p>`:''}`;
+    $('#evFull').style.display='none'; openSheet('sEvent'); flyTo(e); return;
+  }
+  $('#evFull').style.display='';
+  const s=SEV[e.sev], dist=S.me&&!isApprox(e)?`${Math.round(hav(S.me,e))} km de votre lieu`:(S.me?'Non calculée (localisation approximative)':'');
+  const cd = e.cat==='launch'&&e.upcoming ? `<div style="margin:-2px 0 12px"><span class="countdown">${ago(e.t).replace('dans ','T− ')}</span> <span style="color:var(--mute);font-size:13px">${esc(e.launchStatus||'')}</span></div>`:'';
+  $('#eventBody').innerHTML=`
+   <div class="ev-tags"><span class="tag" style="background:${c.c};color:#0b0f19">${esc(c.n)}</span><span class="tag" style="background:${s.c};color:#0b0f19">Gravité ${e.sev||'?'} · ${s.n}</span>${e.nsrc>1?`<span class="tag" style="background:var(--accent);color:#04201b">${e.nsrc} sources</span>`:''}${e.verif==='annonce'?'<span class="tag" style="background:var(--warn);color:#201500">Annoncé</span>':''}</div>
+   <div class="ev-title"><div class="ico" style="background:${c.c};color:#fff">${svg(c.ic)}</div><div><h3>${esc(e.title)}</h3><div style="color:var(--mute);font-size:13px;margin-top:3px">${esc(e.place||'')}</div></div></div>${cd}
+   <dl class="kv">
+     <dt>Pays</dt><dd>${esc(e.country||(e.lat==null?'—':'En mer / non attribué'))}</dd>
+     <dt>${e.upcoming?'Prévu':'Date'}</dt><dd>${fmtDate(e.t)} <span style="color:var(--mute)">(${ago(e.t)})</span></dd>
+     <dt>Mise à jour</dt><dd>${fmtDate(e.updated)}</dd>
+     ${catSpecific(e).map(([k,v])=>`<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}
+     <dt>Vérification</dt><dd>${esc(e.verifLabel||'—')}</dd>
+     <dt>Source</dt><dd>${e.sources.map(x=>esc(x.n)).slice(0,3).join(' · ')}</dd>
+     <dt>Précision</dt><dd>${esc(PREC[e.precision]||e.precision||'—')}</dd>
+     ${dist?`<dt>Distance</dt><dd>${dist}</dd>`:''}
+   </dl>`;
+  openSheet('sEvent'); if(e.lat!=null) flyTo(e);
+}
+function flyTo(e){ const a=G.pointOfView().altitude; G.pointOfView({lat:e.lat-(innerWidth<900?6*Math.min(1,a):0),lng:e.lng,altitude:Math.min(a,1.2)},700); }
+$('#evFull').onclick=()=>{ if(S.sel) location.hash='ev-'+S.sel.sid; };
+
+/* ============ Rapport complet ============ */
+const NEARBY_LAYERS=['nuclear','dam','port','airport','choke','spaceport','cable','dc','milbase'];
+async function renderReport(e){
+  const c=CAT[e.cat], s=SEV[e.sev];
+  const related=S.events.filter(x=>x!==e&&x.cat===e.cat&&e.lat!=null&&hav(x,e)<500).slice(0,6);
+  const chrono = e.track&&e.track.length>1
+    ? e.track.slice().reverse().map(([t,la,ln,m])=>`<div><b>${fmtDate(t)}</b> — position ${la}, ${ln}${m!=null?` · ${m} ${esc(e.magUnit||'')}`:''}</div>`).join('')
+    : `<div><b>${fmtDate(e.t)}</b> — ${e.upcoming?'date prévue':'événement enregistré'} (${esc(e.sources[0]?.n||'')})</div>${T(e.updated)!==e.t?`<div><b>${fmtDate(e.updated)}</b> — dernière mise à jour de la source</div>`:''}`;
+  $('#report').innerHTML=`
+   <button class="back" onclick="history.length>1?history.back():(location.hash='')">‹ Retour au globe</button>
+   <div class="ev-tags"><span class="tag" style="background:${c.c};color:#0b0f19">${esc(c.famName)} › ${esc(c.n)}</span><span class="tag" style="background:${s.c};color:#0b0f19">Gravité ${e.sev||'?'} · ${s.n}</span></div>
+   <h1 class="h">${esc(e.title)}</h1><div class="sub">${esc(e.place||'')}${e.country&&e.place!==e.country?' · '+esc(e.country):''}</div>
+   <div class="card2"><h4>Résumé objectif</h4><p style="margin:0;line-height:1.55;font-size:14.5px">${summary(e)}</p></div>
+   <div class="card2"><h4>Informations publiées par la source</h4><dl class="kv" style="background:none;border:0;padding:0">
+     <dt>Catégorie</dt><dd>${esc(c.n)}</dd>${e.lat!=null?`<dt>Coordonnées</dt><dd>${(+e.lat).toFixed(3)}, ${(+e.lng).toFixed(3)}</dd>`:''}<dt>Précision</dt><dd>${esc(PREC[e.precision]||'—')}</dd>
+     ${catSpecific(e).map(([k,v])=>`<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}
+     ${e.mag!=null&&e.cat==='quake'?`<dt>Magnitude</dt><dd>${(+e.mag).toFixed(1)}</dd>`:''}
+     <dt>Vérification</dt><dd>${esc(e.verifLabel||'—')}</dd><dt>Titre original</dt><dd>${esc(e.titleOrig||'—')}</dd></dl>
+     ${e.description||e.missionDesc?`<p style="margin:12px 0 0;font-size:13.5px;line-height:1.5;color:#c9d4e6">${esc(e.description||e.missionDesc)}</p>`:''}</div>
+   <div class="card2"><h4>Informations non confirmées</h4><p style="margin:0;color:var(--mute);font-size:13.5px">Aucune. GLOBAL ALERT n'affiche que les champs publiés par les sources officielles listées ci-dessous ; aucun bilan ni détail n'est ajouté ou déduit.</p></div>
+   <div class="card2"><h4>Pourquoi cette gravité ?</h4><p style="margin:0;font-size:13.5px;line-height:1.5">${esc(e.sevWhy||'—')}</p></div>
+   <div class="card2"><h4>Chronologie</h4><div class="chrono">${chrono}</div></div>
+   <div class="card2"><h4>Sources consultables (${e.sources.length})</h4><ul style="margin:0;padding-left:18px;font-size:13.5px;line-height:1.7;word-break:break-all">${e.sources.map(x=>`<li>${esc(x.n)} — ${extLink(x.u)}</li>`).join('')}</ul></div>
+   <div class="card2" id="nearby"><h4>Infrastructures à proximité (&lt; 300 km)</h4><p style="margin:0;color:var(--mute);font-size:13px">${e.lat==null?'Événement non géolocalisé.':'Calcul en cours…'}</p></div>
+   ${related.length?`<div class="card2"><h4>Événements liés (même catégorie, &lt; 500 km)</h4>${related.map(feedRow).join('')}</div>`:''}
+   <div class="split"><button class="btn sec" id="cp">Copier le lien</button>${e.lat!=null?'<button class="btn pri" id="go">Voir sur le globe</button>':''}</div>
+   <p class="note" id="cpmsg"></p>`;
+  $('#cp').onclick=async()=>{ const url=location.href; try{ await navigator.clipboard.writeText(url); $('#cpmsg').textContent='Lien copié.'; }catch(x){ $('#cpmsg').textContent='Copie refusée par le navigateur : '+url; } };
+  if($('#go')) $('#go').onclick=()=>{ location.hash=''; setTimeout(()=>{ G.pointOfView({lat:e.lat,lng:e.lng,altitude:0.5},900); openEvent(e); },50); };
+  $('#report').querySelectorAll('[data-id]').forEach(r=>r.onclick=()=>location.hash='ev-'+r.dataset.id);
+  if(e.lat!=null){
+    await Promise.all(NEARBY_LAYERS.filter(k=>S.refIndex[k]?.n).map(loadRef));
+    const near=NEARBY_LAYERS.flatMap(k=>(S.ref[k]?.items||[]).map(it=>[it,hav(e,it)])).filter(([,d])=>d<300).sort((a,b)=>a[1]-b[1]).slice(0,12);
+    const box=$('#nearby'); if(box) box.innerHTML=`<h4>Infrastructures à proximité (&lt; 300 km)</h4>`+(near.length?near.map(([it,d])=>`<div class="feed-item" data-ref="${it.sid}"><div class="ico" style="background:${CAT[it.cat].c}22;color:${CAT[it.cat].c}">${svg(CAT[it.cat].ic)}</div><div style="flex:1;min-width:0"><b>${esc(it.title)}</b><small>${esc(CAT[it.cat].n)} · ${Math.round(d)} km${isApprox(e)?' (distance indicative)':''}</small></div></div>`).join(''):'<p style="margin:0;color:var(--mute);font-size:13px">Aucune infrastructure référencée dans ce rayon.</p>');
+    box?.querySelectorAll('[data-ref]').forEach(r=>r.onclick=()=>{ location.hash=''; const it=byId(r.dataset.ref); if(it){ S.layers.add(it.cat); renderAll(); setTimeout(()=>openEvent(it),60);} });
+  }
+}
+function summary(e){
+  const src=e.sources.map(s=>s.n).filter((v,i,a)=>a.indexOf(v)===i).slice(0,3).join(', ');
+  if(e.cat==='quake') return `Un séisme de magnitude ${(+e.mag).toFixed(1)} a été enregistré ${esc(e.place)}${e.country?` (${esc(e.country)})`:''} le ${fmtDate(e.t)}${e.depth!=null?`, à environ ${(+e.depth).toFixed(0)} km de profondeur`:''}, selon ${esc(src)}. ${e.verif==='officiel-revu'?'Les paramètres ont été revus par un sismologue.':'Les paramètres sont issus du traitement automatique et peuvent encore être révisés.'}${e.gdacsLevel?` Le GDACS lui attribue une alerte « ${esc(e.gdacsLevel)} ».`:''}`;
+  if(e.cat==='launch') return `${e.upcoming?'Lancement prévu':'Lancement'} « ${esc(e.titleOrig)} »${e.provider?` opéré par ${esc(e.provider)}`:''} depuis ${esc(e.padName||'un site non précisé')}${e.country?` (${esc(e.country)})`:''}, ${e.upcoming?'programmé le':'le'} ${fmtDate(e.t)}. Statut publié : ${esc(e.launchStatus||'inconnu')}.${e.upcoming?' Une date prévue peut évoluer jusqu\'au dernier moment.':''}`;
+  if(e.cat==='health') return `L'Organisation mondiale de la santé a publié une note « Disease Outbreak News » le ${fmtDate(e.t)} : « ${esc(e.titleOrig)} ». La position affichée est le centre du pays concerné, pas le lieu exact des cas.`;
+  if(e.cat==='cyber') return `La CISA a ajouté ${esc(e.titleOrig)} à son catalogue des vulnérabilités activement exploitées le ${fmtDate(e.t)}. Produit concerné : ${esc(e.vendor)} ${esc(e.product)}.${e.ransomware?' Une utilisation par des rançongiciels est connue.':''}`;
+  if(e.cat==='piracy') return `Incident maritime signalé le ${fmtDate(e.t)} dans le système ASAM de la NGA : ${esc(e.hostility||'auteurs non précisés')} contre ${esc(e.victim||'un navire')}${e.country?`, près de ${esc(e.country)}`:', en mer'}.`;
+  if(e.cat==='fireball') return `Bolide détecté par des capteurs gouvernementaux le ${fmtDate(e.t)}${e.energyKt!=null?`, énergie d'impact estimée à ${e.energyKt} kt`:''}${e.altKm?`, à ${e.altKm} km d'altitude`:''}. Données publiées par le CNEOS (NASA/JPL).`;
+  return `${esc(CAT[e.cat].n)} : « ${esc(e.titleOrig)} ». Suivi depuis le ${fmtDate(e.t)}, dernière mise à jour le ${fmtDate(e.updated)}. Sources : ${esc(src)}${e.nsrc>1?` — l'événement est confirmé par ${e.nsrc} sources indépendantes`:''}.`;
+}
+
+/* ============ Flux / Tableau / Sources ============ */
+function feedRow(e){ const c=CAT[e.cat]; return `<div class="feed-item" data-id="${e.sid}"><div class="ico" style="background:${c.c}22;color:${c.c}">${svg(c.ic)}</div><div style="flex:1;min-width:0"><b>${esc(e.title)}</b><small><span style="color:${SEV[e.sev].c}">● ${SEV[e.sev].n}</span> · ${esc(e.country||e.place||'')} · ${ago(e.t)} · ${esc(e.sources[0]?.n||'')}${e.nsrc>1?` +${e.nsrc-1}`:''}</small></div></div>`; }
+function renderFeed(){
+  const ev=VIS.filter(e=>!e.ref), ng=visibleNongeo();
+  $('#fluxSub').textContent=`${ev.length} événement(s) géolocalisé(s) et ${ng.length} non géolocalisé(s), selon les couches et filtres actifs.`;
+  $('#fluxBody').innerHTML=`<div class="card2">${ev.length?ev.slice(0,250).map(feedRow).join(''):'<p style="color:var(--mute)">Aucun événement.</p>'}</div>`+
+    (ng.length?`<div class="card2"><h4>Non géolocalisés (cyber)</h4>${ng.slice(0,100).map(feedRow).join('')}</div>`:'');
+  $('#fluxBody').querySelectorAll('[data-id]').forEach(r=>r.onclick=()=>location.hash='ev-'+r.dataset.id);
+}
+function bars(rows,color){ const max=Math.max(1,...rows.map(r=>r[1])); return rows.map(([l,v,c])=>`<div class="bar"><span>${esc(l)}</span><div class="tr"><i style="width:${v/max*100}%;background:${c||color}"></i></div><span>${v}</span></div>`).join(''); }
+function renderDash(){
+  const v=VIS.filter(e=>!e.ref), d24=v.filter(e=>e.t>Date.now()-864e5&&e.t<=Date.now()).length;
+  const cats=Object.values(CAT).filter(c=>c.kind==='ev'&&c.src);
+  const byCat=cats.map(c=>[c.n,(c.nongeo?visibleNongeo():v).filter(e=>e.cat===c.k).length,c.c]).filter(r=>r[1]).sort((a,b)=>b[1]-a[1]);
+  const bySev=SEV.map((s,i)=>[s.n,v.filter(e=>e.sev===i).length,s.c]);
+  const cm=d3.rollups(v.filter(e=>e.country),x=>x.length,e=>e.country).sort((a,b)=>b[1]-a[1]).slice(0,10);
+  const days=d3.range(13,-1,-1).map(i=>{ const s=new Date(); s.setHours(0,0,0,0); s.setDate(s.getDate()-i); return [s.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'}),v.filter(e=>e.t>=+s&&e.t<+s+864e5).length]; });
+  const okN=Object.values(S.status).filter(c=>c.state==='ok').length, allN=Object.keys(S.status).length;
+  $('#dashSub').textContent=`Calculé sur les événements filtrés · dernière collecte ${S.generated?ago(S.generated):'—'}.`;
+  $('#dash').innerHTML=`<div class="kpis">
+    <div class="kpi"><b>${v.length}</b><small>Événements affichés</small></div><div class="kpi"><b>${d24}</b><small>Nouveaux (24 h)</small></div>
+    <div class="kpi"><b>${v.filter(e=>e.sev>=4).length}</b><small>Gravité élevée ou critique</small></div><div class="kpi"><b>${okN}/${allN}</b><small>Connecteurs opérationnels</small></div></div>
+    <div class="card2"><h4>Par catégorie</h4>${bars(byCat)||'—'}</div><div class="card2"><h4>Par gravité</h4>${bars(bySev)}</div>
+    <div class="card2"><h4>Pays les plus concernés</h4>${cm.length?bars(cm,'#2ee6c5'):'<p style="color:var(--mute);margin:0">—</p>'}</div>
+    <div class="card2"><h4>Évolution sur 14 jours</h4>${bars(days,'#60a5fa')}</div>
+    <div class="card2"><h4>Multi-sources</h4><p style="margin:0;font-size:13.5px">${v.filter(e=>e.nsrc>1).length} événement(s) confirmé(s) par au moins deux sources indépendantes.</p></div>`;
+}
+function renderSources(){
+  const st=Object.values(S.status);
+  const rows=st.map(c=>`<tr><td><b>${esc(c.name||c.id)}</b>${c.url?`<br>${extLink(c.url,'Site de la source')}`:''}<br><small style="color:var(--mute)">${esc(c.licence||'')}</small></td>
+    <td>${c.state==='ok'?'<span class="st-live">● Opérationnel</span>':`<span class="st-err">● Erreur</span><br><small style="color:var(--mute)">${esc(c.err||'')}</small>`}${c.note?`<br><small class="stale">${esc(c.note)}</small>`:''}</td>
+    <td>${c.lastCheck?ago(c.lastCheck):'—'}<br><small style="color:var(--mute)">donnée : ${c.lastData?ago(c.lastData):'—'}</small></td><td>${c.n??'—'}</td></tr>`).join('');
+  const ri=Object.entries(S.refIndex).map(([k,m])=>`<tr><td><b>${esc(CAT[k]?.n||k)}</b><br>${m.sourceUrl?extLink(m.sourceUrl,m.source):esc(m.source||'')}<br><small style="color:var(--mute)">${esc(m.licence||'')}</small></td>
+    <td>${m.state==='ok'?'<span class="st-live">● À jour</span>':m.state==='stale'?'<span class="stale">● Dernière mise à jour en échec</span>':'<span class="st-err">● Erreur</span>'}${m.err?`<br><small style="color:var(--mute)">${esc(m.err)}</small>`:''}</td><td>${m.generated?fmtDate(m.generated):'—'}</td><td>${m.n??0}</td></tr>`).join('');
+  const todo=Object.values(CAT).filter(c=>c.cand&&!layerMeta(c).live).map(c=>`<tr><td>${esc(c.n)}</td><td style="color:var(--mute)">${esc(c.cand)}</td></tr>`).join('');
+  $('#srcs').innerHTML=`<div class="card2"><h4>Connecteurs événementiels ${S.source==='direct'?'(mode direct navigateur)':''}</h4><table><tr><th>Source</th><th>État</th><th>Contrôle</th><th>Élém.</th></tr>${rows||'<tr><td colspan=4>—</td></tr>'}</table>
+    <p class="note">Collecte automatique toutes les 10 minutes (GitHub Actions). En cas d'échec ponctuel, la dernière collecte réussie est conservée et signalée.</p></div>
+    <div class="card2"><h4>Référentiels (objets permanents)</h4><table><tr><th>Couche</th><th>État</th><th>Mise à jour</th><th>Sites</th></tr>${ri||'<tr><td colspan=4>—</td></tr>'}</table></div>
+    <div class="card2"><h4>En attente d'une source fiable et gratuite</h4><table><tr><th>Catégorie</th><th>Piste (licence à valider)</th></tr>${todo}</table></div>`;
+}
+
+/* ============ Pays ============ */
+function openCountry(f){
+  const name=f.properties.name, list=VIS.filter(e=>!e.ref&&e.country===name);
+  $('#cTitle').textContent=name;
+  $('#cBody').innerHTML=`<p style="margin:0 0 12px;color:var(--mute)">${list.length} événement(s) affiché(s) avec les couches et filtres actuels.</p>
+   <div class="split" style="margin-bottom:12px"><button class="btn pri" id="cf">Filtrer sur ce pays</button><button class="btn sec" id="cz">Zoomer</button></div>
+   <div class="card2" style="padding:4px 14px">${list.slice(0,30).map(feedRow).join('')||'<p style="color:var(--mute)">Aucun événement.</p>'}</div>`;
+  $('#cf').onclick=()=>{ S.filters.country=name; closeSheets(); renderAll(); flyToFiltered(); };
+  $('#cz').onclick=()=>{ const [x,y]=d3.geoCentroid(f); closeSheets(); G.pointOfView({lat:y,lng:x,altitude:0.9},900); };
+  $('#cBody').querySelectorAll('[data-id]').forEach(r=>r.onclick=()=>{ closeSheets(); openEvent(byId(r.dataset.id)); });
+  openSheet('sCountry');
+}
+
+/* ============ Près de vous ============ */
+function nearList(){ if(!S.me) return []; return VIS.filter(e=>!e.ref&&!isApprox(e)&&!(e.cat==='launch'&&e.upcoming)).map(e=>[e,hav(S.me,e)]).filter(([,d])=>d<=S.radius).sort((a,b)=>a[1]-b[1]); }
+function openNear(){
+  const near=nearList();
+  $('#nearBody').innerHTML=`
+   <p style="margin:0 0 12px;color:var(--mute);font-size:13.5px">Votre position reste dans votre navigateur : elle n'est envoyée nulle part.</p>
+   <div class="split" style="margin-bottom:14px"><button class="btn pri" id="nPick">Choisir sur le globe</button>${navigator.geolocation?'<button class="btn sec" id="nGeo">Me localiser</button>':''}</div>
+   <div class="fam" style="margin-top:0">Rayon</div><div class="chips" id="nR">${[5,10,25,50,100,250,500].map(r=>`<button class="chip${S.radius===r?' on':''}" data-v="${r}">${r} km</button>`).join('')}</div>
+   <p class="note" id="nMsg"></p>
+   ${S.me?`<div class="fam">${near.length} alerte(s) dans un rayon de ${S.radius} km</div><div class="card2" style="padding:4px 14px">${near.map(([e,d])=>feedRow(e).replace('</small>',` · ${Math.round(d)} km</small>`)).join('')||'<p style="color:var(--mute)">Aucune alerte dans ce rayon.</p>'}</div>
+     <p class="note">Les événements à localisation approximative (zones, centroïdes, pays) sont exclus du calcul de distance.</p>`:''}`;
+  $('#nPick').onclick=()=>{ closeSheets(); S.picking=true; $('#pickhint').style.display='block'; G.controls().autoRotate=false; };
+  if($('#nGeo')) $('#nGeo').onclick=()=>{ $('#nMsg').textContent='Demande de localisation…';
+    navigator.geolocation.getCurrentPosition(p=>setMe(p.coords.latitude,p.coords.longitude), err=>{ $('#nMsg').textContent='Localisation indisponible ('+(err.message||'refusée')+'). Choisissez un lieu sur le globe.'; },{timeout:8000}); };
+  $('#nR').querySelectorAll('.chip').forEach(b=>b.onclick=()=>{ S.radius=+b.dataset.v; try{localStorage.setItem('ga_radius',S.radius);}catch(e){} renderNear(); openNear(); });
+  $('#nearBody').querySelectorAll('[data-id]').forEach(r=>r.onclick=()=>{ closeSheets(); openEvent(byId(r.dataset.id)); });
+  openSheet('sNear');
+}
+function setMe(lat,lng){ S.me={lat,lng}; try{localStorage.setItem('ga_me',JSON.stringify(S.me));}catch(e){} S.picking=false; $('#pickhint').style.display='none'; renderNear(); drawMarkers(); G.pointOfView({lat,lng,altitude:0.7},900); openNear(); }
+function renderNear(){
+  const box=$('#near'); $('#fNear').classList.toggle('on',!!S.me);
+  if(!S.me||$('#banner').style.display==='block'){ box.style.display='none'; return; }
+  const n=nearList(); box.style.display='block';
+  box.innerHTML=`<div class="card"><span class="n">${n.length}</span><div><b style="color:var(--crit);font:700 11px 'Space Grotesk',Inter,sans-serif;letter-spacing:.08em">● PRÈS DE VOUS · ${S.radius} km</b><br>${n.length?`${esc(n[0][0].title)} · ${Math.round(n[0][1])} km`:'Aucune alerte dans ce rayon'}</div></div>`;
+  box.onclick=openNear;
+}
+try{ const m=JSON.parse(localStorage.getItem('ga_me')||'null'); if(m&&Number.isFinite(m.lat)) S.me=m; S.radius=+localStorage.getItem('ga_radius')||100; }catch(e){}
+
+/* ============ Feuilles & navigation ============ */
+function openSheet(id){ closeSheets(true); $('#scrim').classList.add('on'); $('#'+id).classList.add('on'); }
+function closeSheets(keep){ document.querySelectorAll('.sheet.on').forEach(s=>s.classList.remove('on')); if(!keep) $('#scrim').classList.remove('on'); }
+$('#scrim').onclick=()=>closeSheets();
+document.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>closeSheets());
+document.querySelectorAll('.sheet').forEach(sh=>{ let y0=null; const g=sh.querySelector('.grab');
+  g.addEventListener('touchstart',e=>y0=e.touches[0].clientY,{passive:true});
+  g.addEventListener('touchend',e=>{ if(y0!=null&&e.changedTouches[0].clientY-y0>50) closeSheets(); y0=null; }); });
+$('#fLayers').onclick=()=>{ renderLayers(); openSheet('sLayers'); };
+$('#fFilter').onclick=openFilters;
+$('#fNear').onclick=openNear;
+$('#fMode').onclick=()=>{ S.globeMode=(S.globeMode+1)%MODES.length; applyMode(); toast(MODES[S.globeMode].n); };
+$('#tickPause').onclick=e=>{ const t=$('#tick'); t.classList.toggle('paused'); e.currentTarget.textContent=t.classList.contains('paused')?'▶':'❚❚'; };
+function toast(msg){ const t=$('#tip'); t.textContent=msg; t.style.display='block'; t.style.left='50%'; t.style.transform='translateX(-50%)'; t.style.top='calc(var(--st) + 70px)'; clearTimeout(toast.t); toast.t=setTimeout(()=>{t.style.display='none';t.style.transform='';},1400); }
+document.querySelectorAll('#tabs button').forEach(b=>b.onclick=()=>{ location.hash=b.dataset.tab==='carte'?'':b.dataset.tab; if(b.dataset.tab==='carte') route(); });
+addEventListener('keydown',e=>{ if(e.key==='Escape'){ closeSheets(); if(location.hash) location.hash=''; } });
+function route(){
+  const h=location.hash.slice(1); let tab='carte';
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('on'));
+  if(h.startsWith('ev-')){ const e=byId(h.slice(3)); if(e){ closeSheets(); renderReport(e); $('#p-report').classList.add('on'); $('#p-report').scrollTop=0; } }
+  else if(['flux','tableau','sources'].includes(h)){ tab=h; closeSheets(); $('#p-'+h).classList.add('on'); ({flux:renderFeed,tableau:renderDash,sources:renderSources})[h](); }
+  document.querySelectorAll('#tabs button').forEach(b=>b.classList.toggle('on',b.dataset.tab===tab&&!h.startsWith('ev-')));
+  $('#fabs').style.display=h?'none':'flex';
+}
+addEventListener('hashchange',route);
+
+/* ============ Démarrage ============ */
+(async function(){
+  initCountries();
+  try{ initGlobe(); }catch(e){ console.error(e); $('#loading div').innerHTML='Impossible d\'initialiser le globe 3D (WebGL indisponible ?).'; return; }
+  await refresh(); route();
+  const L=$('#loading'); L.style.opacity=0; setTimeout(()=>L.remove(),450);
+  setInterval(refresh,5*60*1000);
+})();
+</script>
+</body>
+</html>
