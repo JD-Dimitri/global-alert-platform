@@ -41,7 +41,7 @@ const pickInfo = infos => infos.find(i => /^fr/i.test(i.language || '')) || info
 
 export async function alerthub() {
   const out = []; let offset = 0, count = Infinity;
-  while (offset < count && offset < 4000) {
+  while (offset < count && offset < 8000) {
     const j = await http('https://alerthub-api.ifrc.org/graphql/', { timeout: 60000, method: 'POST', body: JSON.stringify({ query: Q, variables: { offset } }) });
     if (j.errors?.length) throw new Error('GraphQL : ' + j.errors[0].message);
     const page = j.data.public.alerts; count = page.count;
@@ -58,14 +58,19 @@ export async function alerthub() {
         lat: R(pt.lat), lng: R(pt.lng), precision: pt.precision,
         time: iso(Date.parse(inf.onset || inf.effective || a.sent)), updated: iso(Date.parse(a.sent)), expires: inf.expires || null,
         sev, sevWhy: `Gravité CAP déclarée par l'autorité émettrice : « ${CAP_SEV_FR[inf.severity] || inf.severity} » (urgence ${inf.urgency?.toLowerCase?.()}, certitude ${inf.certainty?.toLowerCase?.()}).`,
-        description: (inf.description || '').slice(0, 900), instruction: (inf.instruction || '').slice(0, 600),
+        description: (inf.description || '').slice(0, 320), instruction: (inf.instruction || '').slice(0, 220),
         authority: inf.senderName || a.sender, zone: zone || (a.admin1s || []).map(x => x.name).join(', '), lang: inf.language,
         verif: 'officiel', sources: [{ n: `${inf.senderName || a.sender} (CAP via IFRC Alert Hub)`, u: inf.web || a.url }]
       });
     }
     offset += 100;
   }
-  return out;
+  // Une même alerte peut être republiée (mises à jour) : on garde la plus récente par (titre, zone, autorité, expiration).
+  const best = new Map();
+  for (const e of out) { const k = [e.titleOrig, e.zone, e.authority, e.expires].join('|'); const o = best.get(k); if (!o || e.updated > o.updated) best.set(k, e); }
+  const res = [...best.values()];
+  res.total = count; res.truncated = count > 8000;
+  return res;
 }
 
 /* =====================================================================
@@ -155,7 +160,10 @@ function pickLocation(v1) {
   const l = locs[0]; if (!l || rank(l[0]) > 1) return null;
   return { name: l[1], lat: +l[4], lng: +l[5], fid: l[6], precision: rank(l[0]) === 0 ? 'ville' : 'region' };
 }
-function title(extras) { const m = /<PAGE_TITLE>([\s\S]*?)<\/PAGE_TITLE>/.exec(extras || ''); return m ? m[1].replace(/\s+/g, ' ').trim() : null; }
+const ENT = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ' };
+const decode = s => s.replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCodePoint(parseInt(h, 16))).replace(/&#(\d+);/g, (_, d) => String.fromCodePoint(+d)).replace(/&([a-z]+);/gi, (m, n) => ENT[n.toLowerCase()] ?? m);
+function title(extras) { const m = /<PAGE_TITLE>([\s\S]*?)<\/PAGE_TITLE>/.exec(extras || ''); return m ? decode(m[1]).replace(/\s+/g, ' ').trim() : null; }
+const NOT_ROAD = /\b(ship|cruise|boat|ferry|vessel|train|rail|plane|aircraft|jet|helicopter|navire|bateau|paquebot|avion|h[ée]licopt[eè]re|barco|buque|tren|avi[oó]n|schiff|zug|flugzeug|nave|treno|aereo)\b/i;
 
 /** Lit les derniers fichiers GKG, renvoie les articles candidats (accumulés sur 48 h via le cache). */
 export async function gdeltArticles(prevCache = []) {
@@ -171,7 +179,7 @@ export async function gdeltArticles(prevCache = []) {
       const f = line.split('\t'); if (f.length < 27) continue;
       const u = f[4]; if (!u || seen.has(u)) continue;
       const t = title(f[26]); if (!t || EXCLUDE.test(t)) continue;
-      const cat = Object.entries(PRESS_CATS).find(([, c]) => c.re.test(t))?.[0]; if (!cat) continue;
+      const cat = Object.entries(PRESS_CATS).find(([k, c]) => c.re.test(t) && !(k === 'roadacc' && NOT_ROAD.test(t)))?.[0]; if (!cat) continue;
       const loc = pickLocation(f[9]); if (!loc) continue;
       seen.add(u);
       const d = f[1]; const ts = Date.UTC(+d.slice(0, 4), +d.slice(4, 6) - 1, +d.slice(6, 8), +d.slice(8, 10), +d.slice(10, 12));

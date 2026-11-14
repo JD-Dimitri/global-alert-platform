@@ -175,7 +175,7 @@ const inRegion = (e,r) => REGIONS[r].some(([a,b,c,d])=>e.lat>=a&&e.lat<=b&&e.lng
 /* ============ État ============ */
 const DEFAULT_LAYERS = ['cap','quake','fire','storm','flood','volcano','drought','ice','health','piracy','launch'];
 const S = {
-  events:[], nongeo:[], ref:{}, refIndex:{}, status:{}, generated:null, source:'?', mode:'multi',
+  events:[], ev:{}, counts:{}, nongeo:[], ref:{}, refIndex:{}, status:{}, generated:null, source:'?', mode:'multi',
   layers:new Set(DEFAULT_LAYERS), filters:{period:7,minSev:0,regions:new Set(),country:'',q:'',reviewedOnly:false},
   me:null, radius:100, picking:false, globeMode:0, sel:null
 };
@@ -209,8 +209,8 @@ async function getJSON(url,ms=20000){ const c=new AbortController(), t=setTimeou
 
 async function loadCollected(){
   const [ev,st,ri]=await Promise.all([getJSON('data/events.json'),getJSON('data/status.json').catch(()=>({})),getJSON('data/ref/index.json').catch(()=>({}))]);
-  S.source='collector'; S.generated=T(ev.generated); S.status=st; S.refIndex=ri;
-  return {events:ev.events||[], nongeo:ev.nongeo||[]};
+  S.source='collector'; S.generated=T(ev.generated); S.status=st; S.refIndex=ri; S.counts=ev.counts||{};
+  return {events:ev.events||null, nongeo:ev.nongeo||[]};
 }
 /* Repli navigateur (si la page est ouverte sans les données collectées) : USGS + EONET en direct */
 async function loadDirect(){
@@ -230,13 +230,25 @@ async function refresh(){
   let d;
   try{ d=await loadCollected(); }
   catch(e1){ try{ d=await loadDirect(); }catch(e2){ S.source='none'; d={events:[],nongeo:[]}; } }
-  for(const x of [...d.events,...d.nongeo]){ x.sid=safeId(x.id); x.t=T(x.time); }
-  d.events.sort((a,b)=>b.t-a.t); d.nongeo.sort((a,b)=>b.t-a.t);
-  S.events=d.events; S.nongeo=d.nongeo; S.lastRefresh=Date.now();
+  for(const x of d.nongeo){ x.sid=safeId(x.id); x.t=T(x.time); }
+  d.nongeo.sort((a,b)=>b.t-a.t); S.nongeo=d.nongeo; S.lastRefresh=Date.now();
+  if(d.events){ for(const x of d.events){ x.sid=safeId(x.id); x.t=T(x.time); } d.events.sort((a,b)=>b.t-a.t); S.events=d.events; S.ev={}; }
+  else { const loaded=Object.keys(S.ev); S.ev={}; S.events=[]; await Promise.all([...new Set([...loaded,...S.layers])].filter(k=>S.counts[k]).map(loadEv)); }
   await ensureRefLayers();
   renderStatus(); renderAll();
 }
 
+/* Événements d'une catégorie (fichier data/ev/<cat>.json, chargé à la demande) */
+async function loadEv(k){
+  if(S.ev[k]) return S.ev[k];
+  S.ev[k]=[];
+  try{
+    const j=await getJSON(`data/ev/${k}.json`,30000), d=j.defaults||{};
+    S.ev[k]=(j.items||[]).map(i=>{ const x=Object.assign({},d,i); x.sid=safeId(x.id); x.t=T(x.time); return x; });
+  }catch(e){ S.ev[k]=[]; }
+  S.events=Object.values(S.ev).flat().sort((a,b)=>b.t-a.t);
+  return S.ev[k];
+}
 async function loadRef(k){
   if(S.ref[k]!==undefined) return S.ref[k];
   S.ref[k]=null;
@@ -246,7 +258,7 @@ async function loadRef(k){
   }catch(e){ S.ref[k]={meta:null,items:[],err:String(e.message||e)}; }
   return S.ref[k];
 }
-async function ensureRefLayers(){ await Promise.all([...S.layers].filter(k=>CAT[k].kind==='ref'&&S.refIndex[k]).map(loadRef)); }
+async function ensureRefLayers(){ await Promise.all([...S.layers].map(k=>CAT[k].kind==='ref'?(S.refIndex[k]&&loadRef(k)):(S.source==='collector'&&S.counts[k]&&loadEv(k)))); }
 
 /* ============ Filtrage ============ */
 function visible(){
@@ -363,7 +375,7 @@ function layerMeta(c){
   }
   if(!c.src) return {live:false,txt:`<span class="st-na">● À connecter</span>${c.cand?' · '+esc(c.cand):''}`};
   const sts=c.src.map(s=>S.status[s]).filter(Boolean); if(!sts.length) return {live:false,txt:`<span class="st-na">● Indisponible ici</span>`};
-  const okS=sts.filter(s=>s.state==='ok'), n=(c.nongeo?S.nongeo:S.events).filter(e=>e.cat===c.k).length;
+  const okS=sts.filter(s=>s.state==='ok'), n=c.nongeo?S.nongeo.filter(e=>e.cat===c.k).length:(S.source==='collector'?(S.counts[c.k]||0):S.events.filter(e=>e.cat===c.k).length);
   const lbl=okS.length?(PRESS.has(c.k)?'<span class="stale">● PRESSE · non vérifié</span>':Date.now()-S.generated<30*60e3?'<span class="st-live">● LIVE</span>':'<span class="stale">● Données anciennes</span>'):'<span class="st-err">● Erreur</span>';
   return {live:true,txt:`${lbl} · ${n} élément(s)${c.nongeo?' <span class="ng-badge">non géolocalisé</span>':''} · ${sts.map(s=>esc(s.id?.toUpperCase?.()||'')).join(' + ')}`};
 }
@@ -383,7 +395,7 @@ function renderLayers(){
   $('#layersBody').querySelectorAll('[data-m]').forEach(b=>b.onclick=()=>{ S.mode=b.dataset.m; if(S.mode==='solo'&&S.layers.size>1) S.layers=new Set([[...S.layers][0]]); renderAll(); });
   $('#layersBody').querySelectorAll('.sw[data-k]').forEach(b=>b.onclick=async()=>{ const k=b.dataset.k;
     if(S.mode==='solo') S.layers=new Set([k]); else S.layers.has(k)?S.layers.delete(k):S.layers.add(k);
-    if(CAT[k].kind==='ref'&&S.layers.has(k)){ b.classList.add('on'); await loadRef(k); }
+    if(S.layers.has(k)){ b.classList.add('on'); if(CAT[k].kind==='ref') await loadRef(k); else if(S.source==='collector'&&S.counts[k]) await loadEv(k); }
     renderAll(); });
 }
 
@@ -611,7 +623,8 @@ addEventListener('keydown',e=>{ if(e.key==='Escape'){ closeSheets(); if(location
 function route(){
   const h=location.hash.slice(1); let tab='carte';
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('on'));
-  if(h.startsWith('ev-')){ const e=byId(h.slice(3)); if(e){ closeSheets(); renderReport(e); $('#p-report').classList.add('on'); $('#p-report').scrollTop=0; } }
+  if(h.startsWith('ev-')){ const sid=h.slice(3); const show=e=>{ closeSheets(); renderReport(e); $('#p-report').classList.add('on'); $('#p-report').scrollTop=0; };
+    const e=byId(sid); if(e) show(e); else if(S.source==='collector') Promise.all(Object.keys(S.counts).map(loadEv)).then(()=>{ const x=byId(sid); if(x&&location.hash.slice(1)===h) show(x); }); }
   else if(['flux','tableau','sources'].includes(h)){ tab=h; closeSheets(); $('#p-'+h).classList.add('on'); ({flux:renderFeed,tableau:renderDash,sources:renderSources})[h](); }
   document.querySelectorAll('#tabs button').forEach(b=>b.classList.toggle('on',b.dataset.tab===tab&&!h.startsWith('ev-')));
   $('#fabs').style.display=h?'none':'flex';

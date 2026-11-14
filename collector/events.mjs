@@ -9,6 +9,10 @@ const PREV = process.env.PREV_DIR || 'prev';
 const now = Date.now();
 const status = {};
 const prev = readJSON(`${PREV}/events.json`, { events: [], nongeo: [] });
+// Format v2 : événements répartis dans prev/ev/<cat>.json
+if (!prev.events?.length && prev.counts) {
+  prev.events = Object.keys(prev.counts).flatMap(cat => { const f = readJSON(`${PREV}/ev/${cat}.json`, { items: [], defaults: {} }); return f.items.map(i => ({ ...f.defaults, ...i })); });
+}
 const prevStatus = readJSON(`${PREV}/status.json`, {});
 
 /* ===================== Barèmes de gravité (1–5, 0 = indéterminée) ===================== */
@@ -296,7 +300,21 @@ for (const e of all) {
 const events = all.filter(e => e.lat != null && e.lng != null).sort((a, b) => Date.parse(b.time) - Date.parse(a.time));
 const nongeo = all.filter(e => e.lat == null || e.lng == null).sort((a, b) => Date.parse(b.time) - Date.parse(a.time));
 
-writeJSON(`${OUT}/events.json`, { generated: new Date(now).toISOString(), merged, events, nongeo });
+// Un fichier par catégorie (chargé à la demande par le site) ; les champs identiques pour tous les éléments
+// d'une catégorie sont factorisés dans « defaults » pour alléger le téléchargement.
+const counts = {};
+for (const cat of [...new Set(events.map(e => e.cat))]) {
+  const items = events.filter(e => e.cat === cat); counts[cat] = items.length;
+  const defaults = {};
+  for (const k of new Set(items.flatMap(Object.keys))) {
+    const v0 = JSON.stringify(items[0][k]);
+    if (items.length > 3 && items.every(e => JSON.stringify(e[k]) === v0)) defaults[k] = items[0][k];
+  }
+  const slim = items.map(e => { const o = {}; for (const [k, v] of Object.entries(e)) if (!(k in defaults) && v != null && v !== '') o[k] = v; return o; });
+  writeJSON(`${OUT}/ev/${cat}.json`, { generated: new Date(now).toISOString(), defaults, items: slim });
+}
+writeJSON(`${OUT}/events.json`, { generated: new Date(now).toISOString(), merged, counts, nongeo });
+if (byId.alerthub?.truncated && status.alerthub) status.alerthub.note = `Limité à 8 000 alertes sur ${byId.alerthub.total}`;
 writeJSON(`${OUT}/status.json`, status);
 writeJSON(`${OUT}/press-cache.json`, pressArticles || prevPress.filter(a => now - a.ts < 48 * 3600e3));
 console.log(`→ ${events.length} événements géolocalisés, ${nongeo.length} non géolocalisés, ${merged} fusions multi-sources.`);
