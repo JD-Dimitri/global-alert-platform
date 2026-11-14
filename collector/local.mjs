@@ -168,16 +168,19 @@ const NOT_ROAD = /\b(ship|cruise|boat|ferry|vessel|train|rail|plane|aircraft|jet
 /** Lit les fichiers GKG des 4 derniers créneaux de 15 min non encore traités ; cache glissant de 48 h. */
 export async function gdeltArticles(prev = {}) {
   const cache = Array.isArray(prev) ? { files: [], arts: prev } : { files: prev.files || [], arts: prev.arts || [] };
-  const lu = await http('http://data.gdeltproject.org/gdeltv2/lastupdate.txt', { as: 'text' });
-  const latest = lastUpdateUrls(lu)[0]; if (!latest) throw new Error('lastupdate.txt sans fichier GKG');
-  const ts0 = latest.match(/(\d{14})\.gkg/)[1];
-  const t0 = Date.UTC(+ts0.slice(0, 4), +ts0.slice(4, 6) - 1, +ts0.slice(6, 8), +ts0.slice(8, 10), +ts0.slice(10, 12));
+  // Créneaux de 15 min : flux anglais et flux traduit (65 langues) ont chacun leur propre horodatage.
+  const [lu, lt] = await Promise.all([
+    http('http://data.gdeltproject.org/gdeltv2/lastupdate.txt', { as: 'text' }),
+    http('http://data.gdeltproject.org/gdeltv2/lastupdate-translation.txt', { as: 'text' }).catch(() => '')]);
   const stamp = t => new Date(t).toISOString().replace(/[-:T]/g, '').slice(0, 12) + '00';
   const done = new Set(cache.files), urls = [];
-  for (let i = 0; i < 4; i++) {
-    const s = stamp(t0 - i * 15 * 60e3);
-    for (const u of [`http://data.gdeltproject.org/gdeltv2/${s}.gkg.csv.zip`, `http://data.gdeltproject.org/gdeltv2/${s}.translation.gkg.csv.zip`]) if (!done.has(u)) urls.push(u);
+  for (const [txt, suffix] of [[lu, '.gkg.csv.zip'], [lt, '.translation.gkg.csv.zip']]) {
+    const latest = lastUpdateUrls(txt)[0]; if (!latest) continue;
+    const s0 = latest.match(/(\d{14})\./)[1];
+    const t0 = Date.UTC(+s0.slice(0, 4), +s0.slice(4, 6) - 1, +s0.slice(6, 8), +s0.slice(8, 10), +s0.slice(10, 12));
+    for (let i = 0; i < 4; i++) { const u = `http://data.gdeltproject.org/gdeltv2/${stamp(t0 - i * 15 * 60e3)}${suffix}`; if (!done.has(u)) urls.push(u); }
   }
+  if (!urls.length && !cache.files.length) throw new Error('lastupdate.txt sans fichier GKG');
   const seen = new Set(cache.arts.map(a => a.u)), fresh = [], ok = [], errors = [];
   for (const url of urls) {
     let text;
