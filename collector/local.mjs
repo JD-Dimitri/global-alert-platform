@@ -165,32 +165,43 @@ const decode = s => s.replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCodePoin
 function title(extras) { const m = /<PAGE_TITLE>([\s\S]*?)<\/PAGE_TITLE>/.exec(extras || ''); return m ? decode(m[1]).replace(/\s+/g, ' ').trim() : null; }
 const NOT_ROAD = /\b(ship|cruise|boat|ferry|vessel|train|rail|plane|aircraft|jet|helicopter|navire|bateau|paquebot|avion|h[ée]licopt[eè]re|barco|buque|tren|avi[oó]n|schiff|zug|flugzeug|nave|treno|aereo)\b/i;
 
-/** Lit les derniers fichiers GKG, renvoie les articles candidats (accumulés sur 48 h via le cache). */
-export async function gdeltArticles(prevCache = []) {
-  const [en, tr] = await Promise.all([
-    http('http://data.gdeltproject.org/gdeltv2/lastupdate.txt', { as: 'text' }),
-    http('http://data.gdeltproject.org/gdeltv2/lastupdate-translation.txt', { as: 'text' }).catch(() => '')]);
-  const urls = [...lastUpdateUrls(en), ...lastUpdateUrls(tr)];
-  if (!urls.length) throw new Error('lastupdate.txt sans fichier GKG');
-  const seen = new Set(prevCache.map(a => a.u)), fresh = [];
+/** Lit les fichiers GKG des 4 derniers créneaux de 15 min non encore traités ; cache glissant de 48 h. */
+export async function gdeltArticles(prev = {}) {
+  const cache = Array.isArray(prev) ? { files: [], arts: prev } : { files: prev.files || [], arts: prev.arts || [] };
+  const lu = await http('http://data.gdeltproject.org/gdeltv2/lastupdate.txt', { as: 'text' });
+  const latest = lastUpdateUrls(lu)[0]; if (!latest) throw new Error('lastupdate.txt sans fichier GKG');
+  const ts0 = latest.match(/(\d{14})\.gkg/)[1];
+  const t0 = Date.UTC(+ts0.slice(0, 4), +ts0.slice(4, 6) - 1, +ts0.slice(6, 8), +ts0.slice(8, 10), +ts0.slice(10, 12));
+  const stamp = t => new Date(t).toISOString().replace(/[-:T]/g, '').slice(0, 12) + '00';
+  const done = new Set(cache.files), urls = [];
+  for (let i = 0; i < 4; i++) {
+    const s = stamp(t0 - i * 15 * 60e3);
+    for (const u of [`http://data.gdeltproject.org/gdeltv2/${s}.gkg.csv.zip`, `http://data.gdeltproject.org/gdeltv2/${s}.translation.gkg.csv.zip`]) if (!done.has(u)) urls.push(u);
+  }
+  const seen = new Set(cache.arts.map(a => a.u)), fresh = [], ok = [], errors = [];
   for (const url of urls) {
-    const text = unzipText(await fetchBuf(url));
+    let text;
+    try { text = unzipText(await fetchBuf(url)); ok.push(url); } catch (e) { errors.push(String(e.message || e)); continue; }   // fichier pas encore publié : réessayé au prochain passage
     for (const line of text.split('\n')) {
       const f = line.split('\t'); if (f.length < 27) continue;
       const u = f[4]; if (!u || seen.has(u)) continue;
-      const t = title(f[26]); if (!t || EXCLUDE.test(t)) continue;
-      const cat = Object.entries(PRESS_CATS).find(([k, c]) => c.re.test(t) && !(k === 'roadacc' && NOT_ROAD.test(t)))?.[0]; if (!cat) continue;
+      const tt = title(f[26]); if (!tt || EXCLUDE.test(tt)) continue;
+      const cat = Object.entries(PRESS_CATS).find(([k, c]) => c.re.test(tt) && !(k === 'roadacc' && NOT_ROAD.test(tt)))?.[0]; if (!cat) continue;
       const loc = pickLocation(f[9]); if (!loc) continue;
       seen.add(u);
       const d = f[1]; const ts = Date.UTC(+d.slice(0, 4), +d.slice(4, 6) - 1, +d.slice(6, 8), +d.slice(8, 10), +d.slice(10, 12));
-      fresh.push({ u, t, cat, dom: f[3] || new URL(u).hostname, ts, loc, tr: url.includes('translation') });
+      fresh.push({ u, t: tt, cat, dom: f[3] || new URL(u).hostname, ts, loc, tr: url.includes('translation') });
     }
   }
-  return [...prevCache.filter(a => now - a.ts < 48 * 3600e3), ...fresh];
+  if (!ok.length && urls.length) throw new Error('Aucun fichier GKG lisible : ' + errors[0]);
+  const arts = [...cache.arts.filter(a => now - a.ts < 48 * 3600e3), ...fresh].map(a => ({ ...a, t: decode(a.t) }))
+    .filter(a => !(a.cat === 'roadacc' && NOT_ROAD.test(a.t)));
+  return { files: [...cache.files, ...ok].slice(-400), arts, read: ok.length };
 }
 
 /** Regroupe les articles par catégorie + lieu + 36 h ; ne garde que les incidents couverts par ≥ 2 médias distincts. */
 export function clusterPress(arts) {
+  arts = Array.isArray(arts) ? arts : arts.arts;
   const groups = [];
   for (const a of arts.sort((x, y) => x.ts - y.ts)) {
     const g = groups.find(g => g.cat === a.cat && (g.fid === a.loc.fid || hav(g, a.loc) < 15) && a.ts - g.last < 36 * 3600e3);

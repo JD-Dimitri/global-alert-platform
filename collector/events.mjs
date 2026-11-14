@@ -41,7 +41,7 @@ const C = {
   emsc: { id: 'emsc', name: 'EMSC — Centre sismologique euro-méditerranéen', url: 'https://www.seismicportal.eu/', licence: 'Libre avec attribution (EMSC)', cats: ['quake'] },
   gdelt: { id: 'gdelt', name: 'GDELT 2.0 — presse mondiale (65 langues)', url: 'https://www.gdeltproject.org/', licence: 'Libre avec attribution ; articles © leurs éditeurs', cats: Object.keys(PRESS_CATS) }
 };
-const prevPress = readJSON(`${PREV}/press-cache.json`, []);
+const prevPress = readJSON(`${PREV}/press-cache.json`, { files: [], arts: [] });
 let pressArticles = null;
 async function gdelt() { pressArticles = await gdeltArticles(prevPress); return clusterPress(pressArticles); }
 
@@ -316,7 +316,7 @@ for (const cat of [...new Set(events.map(e => e.cat))]) {
 writeJSON(`${OUT}/events.json`, { generated: new Date(now).toISOString(), merged, counts, nongeo });
 if (byId.alerthub?.truncated && status.alerthub) status.alerthub.note = `Limité à 8 000 alertes sur ${byId.alerthub.total}`;
 writeJSON(`${OUT}/status.json`, status);
-writeJSON(`${OUT}/press-cache.json`, pressArticles || prevPress.filter(a => now - a.ts < 48 * 3600e3));
+writeJSON(`${OUT}/press-cache.json`, pressArticles || prevPress);
 console.log(`→ ${events.length} événements géolocalisés, ${nongeo.length} non géolocalisés, ${merged} fusions multi-sources.`);
 const okN = Object.values(status).filter(s => s.state === 'ok').length;
 if (!okN) { console.error('Aucun connecteur opérationnel.'); process.exitCode = 1; }
